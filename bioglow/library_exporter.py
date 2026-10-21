@@ -448,9 +448,7 @@ class RW:
 def exportLibrary():
     global libCode
     global libraryFile
-
-    deleteLibrary()
-
+    
     libFile = open(libraryFile, 'w+')
     libFile.write(libCode)
     libFile.close()
