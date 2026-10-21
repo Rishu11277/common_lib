@@ -7,6 +7,8 @@ class RW:
     LIGHT_REFLECTIONS = {"BLACK": 25, "WHITE": 95}
     BLACK_LINE_RIGHT_EDGE = "Right"
     BLACK_LINE_LEFT_EDGE = "Left"
+    RANDOM = [(523, 60), (659, 60), (784, 60), (1047, 60), (1319, 60), (1568, 250)]
+    RANDOM_2 = 100
 
     YAW_SCALE = -0.1
     YAW_RESET_DELAY = 0.1
@@ -28,6 +30,8 @@ class RW:
     DEFAULTS = {
         "ARC_VELOCITY": 20,
         "TURN_TIMEOUT": 2.0,
+        "GENERAL_VELOCITY": 40,
+        "TURN_TYPE": TURN_TYPES[0],
         "LINE_VELOCITY": 25,
         "SQUARE_UP_LINE_VELOCITY": 15,
         "WALL_SECONDS": 1.0,
@@ -53,11 +57,10 @@ class RW:
         self.BRAKE_START_PERCENTAGE = brakeStartPercentage
         self.CORRECTION_MULTIPLIER = correctionMultiplier
         self.DEBUG = debug
-        self.__startTime = time.ticks_ms()
 
     def __format(self, value):
         if isinstance(value, float):
-            return "{:.1f}".format(value)
+            return str(round(value, 2))
         return str(value)
 
     def __portName(self, portNumber):
@@ -68,60 +71,65 @@ class RW:
     def __colorName(self, lineColor):
         return self.LINE_COLOR_NAMES.get(lineColor, "Invalid (" + str(lineColor) + ")")
 
-    def __printPairs(self, pairs):
-        for i in range(0, len(pairs) - 1, 2):
-            print("[" + str(pairs[i]) + "] " + self.__format(pairs[i + 1]))
-
-    def __logStart(self, functionName, *pairs):
-        self.__startTime = time.ticks_ms()
+    def __printResults(self, functionName, inputs, results, startTime):
         if not self.DEBUG:
             return
         print("[" + self.ROBOT_NAME + "] " + functionName)
-        self.__printPairs(pairs)
-
-    def __logResult(self, *pairs):
-        if not self.DEBUG:
-            return
-        self.__printPairs(pairs)
-        print("[Time] " + "{:.2f}".format(time.ticks_diff(time.ticks_ms(), self.__startTime) / 1000))
+        for name, value in inputs + results:
+            print("[" + name + "] " + self.__format(value))
+        print("[Time] " + "{:.2f}".format(time.ticks_diff(time.ticks_ms(), startTime) / 1000))
         print("")
 
-    def __logError(self, message):
-        print("[Error] " + message)
+    def __printErrors(self, functionName, inputs, errors, startTime):
+        print("[" + self.ROBOT_NAME + "] " + functionName)
+        for name, value in inputs:
+            print("[" + name + "] " + self.__format(value))
+        for message in errors:
+            print("[Error] " + message)
+        print("[Time] " + "{:.2f}".format(time.ticks_diff(time.ticks_ms(), startTime) / 1000))
+        print("")
 
     def __isNumber(self, value) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
 
-    def __inputsValid(self, *checks) -> bool:
-        valid = True
-        for passed, message in checks:
-            if not passed:
-                self.__logError(message)
-                valid = False
-        return valid
+    def __findErrors(self, *checks):
+        return [message for message in checks if message]
 
-    def __velocityCheck(self, velocityPercentage, allowNegative):
-        maximum = self.MAX_VELOCITY_PERCENTAGE
+    def __checkRange(self, name, value, low=None, high=None):
+        if not self.__isNumber(value):
+            return name + " must be a number, got " + str(value)
+        if (low is not None and value < low) or (high is not None and value > high):
+            if high is None:
+                return name + " must be " + str(low) + " or more, got " + str(value)
+            if low is None:
+                return name + " must be " + str(high) + " or less, got " + str(value)
+            return name + " must be " + str(low) + " to " + str(high) + ", got " + str(value)
+
+    def __checkAbove(self, name, value, minimum):
+        if not self.__isNumber(value) or value <= minimum:
+            return name + " must be more than " + str(minimum) + ", got " + str(value)
+
+    def __checkBelow(self, name, value, maximum):
+        if not self.__isNumber(value) or value >= maximum:
+            return name + " must be less than " + str(maximum) + ", got " + str(value)
+
+    def __checkNotZero(self, name, value, maximum=None):
+        if not self.__isNumber(value) or value == 0 or (maximum is not None and abs(value) > maximum):
+            limit = "a number" if maximum is None else "-" + str(maximum) + " to " + str(maximum)
+            return name + " must be " + limit + " and not 0, got " + str(value)
+
+    def __checkOneOf(self, name, value, allowed):
+        if value not in allowed:
+            names = list(allowed.values()) if isinstance(allowed, dict) else list(allowed)
+            return name + " must be " + " or ".join(str(n) for n in names) + ", got " + str(value)
+
+    def __checkVelocity(self, velocityPercentage, allowNegative=False):
         if allowNegative:
-            passed = self.__isNumber(velocityPercentage) and 0 < abs(velocityPercentage) <= maximum
-            message = "Velocity must be -" + str(maximum) + " to " + str(maximum) + " and not 0, got " + str(velocityPercentage)
-        else:
-            passed = self.__isNumber(velocityPercentage) and 0 < velocityPercentage <= maximum
-            message = "Velocity must be 1 to " + str(maximum) + ", got " + str(velocityPercentage)
-        return (passed, message)
+            return self.__checkNotZero("Velocity", velocityPercentage, self.MAX_VELOCITY_PERCENTAGE)
+        return self.__checkRange("Velocity", velocityPercentage, 1, self.MAX_VELOCITY_PERCENTAGE)
 
-    def __degreesCheck(self, degrees):
-        passed = self.__isNumber(degrees) and 0 < abs(degrees) <= self.MAX_TURN_DEGREES
-        return (passed, "Degrees must be -" + str(self.MAX_TURN_DEGREES) + " to " + str(self.MAX_TURN_DEGREES) + " and not 0, got " + str(degrees))
-
-    def __rotationsCheck(self, rotations):
-        return (self.__isNumber(rotations) and rotations != 0, "Rotations must be a number and not 0, got " + str(rotations))
-
-    def __turnTypeCheck(self, turnType, allowedTypes):
-        return (turnType in allowedTypes, "Turn type must be " + " or ".join(allowedTypes) + ", got " + str(turnType))
-
-    def __lineColorCheck(self, lineColor):
-        return (self.__validLineColor(lineColor), "Line color must be color.BLACK or color.WHITE")
+    def __checkDegrees(self, degrees):
+        return self.__checkNotZero("Degrees", degrees, self.MAX_TURN_DEGREES)
 
     def __percentageToUnits(self, percentage):
         return self.WHEEL_MAX_VELOCITY * percentage/100
@@ -146,16 +154,22 @@ class RW:
             return self.__onLine(leftPort, lineColor) and self.__onLine(rightPort, lineColor)
         return self.__onLine(leftPort, lineColor) or self.__onLine(rightPort, lineColor)
 
-    def __validLineColor(self, lineColor) -> bool:
-        return lineColor == color.BLACK or lineColor == color.WHITE
-
     def __sensorReadings(self, leftPort, rightPort):
-        return ("Left Sensor Reflection", color_sensor.reflection(leftPort), "Right Sensor Reflection", color_sensor.reflection(rightPort))
+        return [("Left Sensor Reflection", color_sensor.reflection(leftPort)), ("Right Sensor Reflection", color_sensor.reflection(rightPort))]
 
-    async def turn(self, degrees, velocityPercentage, turnType) -> None:
-        self.__logStart("Turn", "Type", turnType, "Degrees", degrees, "Velocity", velocityPercentage)
-        if not self.__inputsValid(self.__turnTypeCheck(turnType, self.TURN_TYPES), self.__degreesCheck(degrees), self.__velocityCheck(velocityPercentage, False)):
-            self.__logResult()
+    async def turn(self, degrees, velocityPercentage=None, turnType=None) -> None:
+        turnType = self.DEFAULTS["TURN_TYPE"] if turnType is None else turnType
+        if velocityPercentage is None:
+            velocityPercentage = self.DEFAULTS["GENERAL_VELOCITY"]
+        callStartTime = time.ticks_ms()
+        inputs = [("Type", turnType), ("Degrees", degrees), ("Velocity", velocityPercentage)]
+        errors = self.__findErrors(
+            self.__checkOneOf("Turn type", turnType, self.TURN_TYPES),
+            self.__checkDegrees(degrees),
+            self.__checkVelocity(velocityPercentage),
+        )
+        if errors:
+            self.__printErrors("Turn", inputs, errors, callStartTime)
             return
         velocity = int(self.__percentageToUnits(velocityPercentage))
 
@@ -180,15 +194,20 @@ class RW:
 
         await runloop.until(lambda: self.__turnCompleted(degrees))
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__logResult("Actual Degrees Turned", self.__yaw())
+        self.__printResults("Turn", inputs, [("Actual Degrees Turned", self.__yaw())], callStartTime)
 
     async def arcTurn(self, radiusInCm, degrees, velocityPercentage=None) -> None:
         if velocityPercentage is None:
             velocityPercentage = self.DEFAULTS["ARC_VELOCITY"]
-        self.__logStart("Arc Turn", "Radius", radiusInCm, "Degrees", degrees, "Velocity", velocityPercentage)
-        if not self.__inputsValid((self.__isNumber(radiusInCm) and radiusInCm >= 0, "Radius must be 0 or more, got " + str(radiusInCm)),
-                                  self.__degreesCheck(degrees), self.__velocityCheck(velocityPercentage, True)):
-            self.__logResult()
+        callStartTime = time.ticks_ms()
+        inputs = [("Radius", radiusInCm), ("Degrees", degrees), ("Velocity", velocityPercentage)]
+        errors = self.__findErrors(
+            self.__checkRange("Radius", radiusInCm, low=0),
+            self.__checkDegrees(degrees),
+            self.__checkVelocity(velocityPercentage, allowNegative=True),
+        )
+        if errors:
+            self.__printErrors("Arc Turn", inputs, errors, callStartTime)
             return
 
         velocity = self.__percentageToUnits(velocityPercentage)
@@ -203,27 +222,39 @@ class RW:
         motor_pair.move(motor_pair.PAIR_1, steering, velocity=int(velocity))
         await runloop.until(lambda: self.__turnCompleted(degrees))
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__logResult("Steering", steering, "Actual Degrees Turned", self.__yaw())
+        self.__printResults("Arc Turn", inputs, [("Steering", steering), ("Actual Degrees Turned", self.__yaw())], callStartTime)
 
-    async def proportionalTurn(self, degrees, turnType, velocityPercentage=None, timeout=None) -> None:
+    async def proportionalTurn(self, degrees, turnType=None, velocityPercentage=None, timeout=None) -> None:
+        turnType = self.DEFAULTS["TURN_TYPE"] if turnType is None else turnType
         if timeout is None:
             timeout = self.DEFAULTS["TURN_TIMEOUT"]
         if velocityPercentage is None and turnType in self.PROPORTIONAL_TURN_TYPES:
             velocityPercentage = self.PROPORTIONAL_TURN[turnType]["VELOCITY"]
-        self.__logStart("Proportional Turn", "Type", turnType, "Degrees", degrees, "Velocity", velocityPercentage, "Timeout", timeout)
-        if not self.__inputsValid(self.__turnTypeCheck(turnType, self.PROPORTIONAL_TURN_TYPES), self.__degreesCheck(degrees), self.__velocityCheck(velocityPercentage, False),
-                                  (self.__isNumber(timeout) and timeout > 0, "Timeout must be more than 0, got " + str(timeout))):
-            self.__logResult()
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Type", turnType),
+            ("Degrees", degrees),
+            ("Velocity", velocityPercentage),
+            ("Timeout", timeout),
+        ]
+        errors = self.__findErrors(
+            self.__checkOneOf("Turn type", turnType, self.PROPORTIONAL_TURN_TYPES),
+            self.__checkDegrees(degrees),
+            self.__checkVelocity(velocityPercentage),
+            self.__checkAbove("Timeout", timeout, 0),
+        )
+        if errors:
+            self.__printErrors("Proportional Turn", inputs, errors, callStartTime)
             return
         settings = self.PROPORTIONAL_TURN[turnType]
 
         await self.__resetYaw()
         minTurnPower = self.WHEEL_MAX_VELOCITY * settings["MIN"]
         maxTurnPower = self.WHEEL_MAX_VELOCITY * settings["MAX"]
-        startTime = time.ticks_ms()
+        turnStartTime = time.ticks_ms()
         result = "Timed Out"
 
-        while time.ticks_diff(time.ticks_ms(), startTime) < timeout * 1000:
+        while time.ticks_diff(time.ticks_ms(), turnStartTime) < timeout * 1000:
             if degrees > 0:
                 turnError = degrees - self.__yaw()
             else:
@@ -252,32 +283,54 @@ class RW:
             await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__logResult("Result", result, "Actual Degrees Turned", self.__yaw())
+        self.__printResults("Proportional Turn", inputs, [("Result", result), ("Actual Degrees Turned", self.__yaw())], callStartTime)
 
-    async def moveForward(self, rotations, velocityPercentage, acceleration=None, deceleration=None) -> None:
+    async def moveForward(self, rotations, velocityPercentage=None, acceleration=None, deceleration=None) -> None:
+        velocityPercentage = self.DEFAULTS["GENERAL_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
         deceleration = self.DECELERATION if deceleration is None else deceleration
-        self.__logStart("Move Forward", "Rotations", rotations, "Velocity", velocityPercentage, "Acceleration", acceleration, "Deceleration", deceleration)
-        if not self.__inputsValid(self.__rotationsCheck(rotations), self.__velocityCheck(velocityPercentage, False)):
-            self.__logResult()
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Rotations", rotations),
+            ("Velocity", velocityPercentage),
+            ("Acceleration", acceleration),
+            ("Deceleration", deceleration),
+        ]
+        errors = self.__findErrors(
+            self.__checkNotZero("Rotations", rotations),
+            self.__checkVelocity(velocityPercentage),
+        )
+        if errors:
+            self.__printErrors("Move Forward", inputs, errors, callStartTime)
             return
 
         motor.reset_relative_position(self.PORTS["RIGHT_MOTOR"], 0)
         await motor_pair.move_for_degrees(motor_pair.PAIR_1, int(rotations * self.DEGREES_PER_ROTATION), 0,
                                           velocity=int(self.__percentageToUnits(velocityPercentage)), stop=motor.BRAKE,
                                           acceleration=acceleration, deceleration=deceleration)
-        self.__logResult("Actual Rotations Traveled", motor.relative_position(self.PORTS["RIGHT_MOTOR"]) / self.DEGREES_PER_ROTATION)
+        self.__printResults("Move Forward", inputs, [("Actual Rotations Traveled", motor.relative_position(self.PORTS["RIGHT_MOTOR"]) / self.DEGREES_PER_ROTATION)], callStartTime)
 
-    async def moveStraightGyro(self, rotations, velocityPercentage, acceleration=None, brakeStartPercentage=None, correctionMultiplier=None) -> None:
+    async def moveStraightGyro(self, rotations, velocityPercentage=None, acceleration=None, brakeStartPercentage=None, correctionMultiplier=None) -> None:
+        velocityPercentage = self.DEFAULTS["GENERAL_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
         brakeStartPercentage = self.BRAKE_START_PERCENTAGE if brakeStartPercentage is None else brakeStartPercentage
         correctionMultiplier = self.CORRECTION_MULTIPLIER if correctionMultiplier is None else correctionMultiplier
-        self.__logStart("Move Straight (Gyro)", "Rotations", rotations, "Velocity", velocityPercentage, "Acceleration", acceleration,
-                        "Brake Start", brakeStartPercentage * 100, "Correction Multiplier", correctionMultiplier)
-        if not self.__inputsValid(self.__rotationsCheck(rotations), self.__velocityCheck(velocityPercentage, True),
-                                  (self.__isNumber(brakeStartPercentage) and 0 <= brakeStartPercentage <= 1, "Brake start must be 0 to 1, got " + str(brakeStartPercentage)),
-                                  (self.__isNumber(correctionMultiplier) and correctionMultiplier < 0, "Correction multiplier must be negative, got " + str(correctionMultiplier))):
-            self.__logResult()
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Rotations", rotations),
+            ("Velocity", velocityPercentage),
+            ("Acceleration", acceleration),
+            ("Brake Start", brakeStartPercentage),
+            ("Correction Multiplier", correctionMultiplier),
+        ]
+        errors = self.__findErrors(
+            self.__checkNotZero("Rotations", rotations),
+            self.__checkVelocity(velocityPercentage, allowNegative=True),
+            self.__checkRange("Brake start", brakeStartPercentage, 0, 1),
+            self.__checkBelow("Correction multiplier", correctionMultiplier, 0),
+        )
+        if errors:
+            self.__printErrors("Move Straight (Gyro)", inputs, errors, callStartTime)
             return
 
         await self.__resetYaw()
@@ -300,34 +353,53 @@ class RW:
             await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__logResult("Actual Rotations Traveled", motor.relative_position(rightPort) / self.DEGREES_PER_ROTATION, "Ending Drift", self.__yaw())
+        self.__printResults("Move Straight (Gyro)", inputs, [("Actual Rotations Traveled", motor.relative_position(rightPort) / self.DEGREES_PER_ROTATION), ("Ending Drift", self.__yaw())], callStartTime)
 
     async def squareUpOnWall(self, seconds=None, velocityPercentage=None, acceleration=None, deceleration=None) -> None:
         seconds = self.DEFAULTS["WALL_SECONDS"] if seconds is None else seconds
         velocityPercentage = self.DEFAULTS["WALL_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.DEFAULTS["WALL_ACCELERATION"] if acceleration is None else acceleration
         deceleration = self.DEFAULTS["WALL_DECELERATION"] if deceleration is None else deceleration
-        self.__logStart("Square Up On Wall", "Seconds", seconds, "Velocity", velocityPercentage, "Acceleration", acceleration, "Deceleration", deceleration)
-        if not self.__inputsValid((self.__isNumber(seconds) and seconds > 0, "Seconds must be more than 0, got " + str(seconds)),
-                                  self.__velocityCheck(velocityPercentage, True)):
-            self.__logResult()
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Seconds", seconds),
+            ("Velocity", velocityPercentage),
+            ("Acceleration", acceleration),
+            ("Deceleration", deceleration),
+        ]
+        errors = self.__findErrors(
+            self.__checkAbove("Seconds", seconds, 0),
+            self.__checkVelocity(velocityPercentage, allowNegative=True),
+        )
+        if errors:
+            self.__printErrors("Square Up On Wall", inputs, errors, callStartTime)
             return
 
-        startTime = time.ticks_ms()
+        wallStartTime = time.ticks_ms()
         await motor_pair.move_for_time(motor_pair.PAIR_1, int(seconds * 1000), 0, velocity=int(self.__percentageToUnits(velocityPercentage)),
                                        stop=motor.BRAKE, acceleration=acceleration, deceleration=deceleration)
-        self.__logResult("Actual Seconds", time.ticks_diff(time.ticks_ms(), startTime) / 1000)
+        self.__printResults("Square Up On Wall", inputs, [("Actual Seconds", time.ticks_diff(time.ticks_ms(), wallStartTime) / 1000)], callStartTime)
 
     async def moveStraightUntilLine(self, lineColor, bothSensorsOnLine=False, velocityPercentage=None, acceleration=None) -> int:
         leftPort, rightPort = self.PORTS["LEFT_SENSOR"], self.PORTS["RIGHT_SENSOR"]
         velocityPercentage = self.DEFAULTS["LINE_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
-        self.__logStart("Move Straight Until Line", "Line Color", self.__colorName(lineColor), "Wait For Both Sensors", bothSensorsOnLine,
-                        "Left Sensor", self.__portName(leftPort), "Right Sensor", self.__portName(rightPort),
-                        "Velocity", velocityPercentage, "Acceleration", acceleration)
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Line Color", self.__colorName(lineColor)),
+            ("Wait For Both Sensors", bothSensorsOnLine),
+            ("Left Sensor", self.__portName(leftPort)),
+            ("Right Sensor", self.__portName(rightPort)),
+            ("Velocity", velocityPercentage),
+            ("Acceleration", acceleration),
+        ]
 
-        if not self.__inputsValid(self.__lineColorCheck(lineColor), self.__velocityCheck(velocityPercentage, True)):
-            self.__logResult()
+        errors = self.__findErrors(
+            self.__checkOneOf("Line color", lineColor, self.LINE_COLOR_NAMES),
+            self.__checkVelocity(velocityPercentage, allowNegative=True),
+        )
+        if errors:
+            self.__printErrors("Move Straight Until Line", inputs, errors, callStartTime)
             return -1
 
         motor_pair.move(motor_pair.PAIR_1, 0, velocity=int(self.__percentageToUnits(velocityPercentage)), acceleration=acceleration)
@@ -335,7 +407,7 @@ class RW:
         triggeredSensorPort = leftPort if self.__onLine(leftPort, lineColor) else rightPort
 
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__logResult("Triggered Sensor", self.__portName(triggeredSensorPort), *self.__sensorReadings(leftPort, rightPort))
+        self.__printResults("Move Straight Until Line", inputs, [("Triggered Sensor", self.__portName(triggeredSensorPort))] + self.__sensorReadings(leftPort, rightPort), callStartTime)
         return triggeredSensorPort
 
     async def moveStraightUntilLineGyro(self, lineColor, bothSensorsOnLine=False, velocityPercentage=None, acceleration=None, correctionMultiplier=None) -> int:
@@ -343,12 +415,23 @@ class RW:
         velocityPercentage = self.DEFAULTS["LINE_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
         correctionMultiplier = self.CORRECTION_MULTIPLIER if correctionMultiplier is None else correctionMultiplier
-        self.__logStart("Move Straight Until Line (Gyro)", "Line Color", self.__colorName(lineColor), "Wait For Both Sensors", bothSensorsOnLine,
-                        "Left Sensor", self.__portName(leftPort), "Right Sensor", self.__portName(rightPort),
-                        "Velocity", velocityPercentage, "Acceleration", acceleration, "Correction Multiplier", correctionMultiplier)
-        if not self.__inputsValid(self.__lineColorCheck(lineColor), self.__velocityCheck(velocityPercentage, True),
-                                  (self.__isNumber(correctionMultiplier) and correctionMultiplier < 0, "Correction multiplier must be negative, got " + str(correctionMultiplier))):
-            self.__logResult()
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Line Color", self.__colorName(lineColor)),
+            ("Wait For Both Sensors", bothSensorsOnLine),
+            ("Left Sensor", self.__portName(leftPort)),
+            ("Right Sensor", self.__portName(rightPort)),
+            ("Velocity", velocityPercentage),
+            ("Acceleration", acceleration),
+            ("Correction Multiplier", correctionMultiplier),
+        ]
+        errors = self.__findErrors(
+            self.__checkOneOf("Line color", lineColor, self.LINE_COLOR_NAMES),
+            self.__checkVelocity(velocityPercentage, allowNegative=True),
+            self.__checkBelow("Correction multiplier", correctionMultiplier, 0),
+        )
+        if errors:
+            self.__printErrors("Move Straight Until Line (Gyro)", inputs, errors, callStartTime)
             return -1
 
         await self.__resetYaw()
@@ -363,20 +446,29 @@ class RW:
 
         motor_pair.stop(motor_pair.PAIR_1)
         triggeredSensorPort = leftPort if self.__onLine(leftPort, lineColor) else rightPort
-        results = (("Triggered Sensor", self.__portName(triggeredSensorPort)) + self.__sensorReadings(leftPort, rightPort) +
-                   ("Actual Rotations Traveled", motor.relative_position(motorPort) / self.DEGREES_PER_ROTATION, "Ending Drift", self.__yaw()))
-        self.__logResult(*results)
+        self.__printResults("Move Straight Until Line (Gyro)", inputs, [("Triggered Sensor", self.__portName(triggeredSensorPort))] + self.__sensorReadings(leftPort, rightPort) +
+                         [("Actual Rotations Traveled", motor.relative_position(motorPort) / self.DEGREES_PER_ROTATION), ("Ending Drift", self.__yaw())], callStartTime)
         return triggeredSensorPort
 
     async def squareUpOnLine(self, lineColor, velocityPercentage=None, acceleration=None) -> None:
         leftPort, rightPort = self.PORTS["LEFT_SENSOR"], self.PORTS["RIGHT_SENSOR"]
         velocityPercentage = self.DEFAULTS["SQUARE_UP_LINE_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
-        self.__logStart("Square Up On Line", "Line Color", self.__colorName(lineColor), "Left Sensor", self.__portName(leftPort),
-                        "Right Sensor", self.__portName(rightPort), "Velocity", velocityPercentage, "Acceleration", acceleration)
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Line Color", self.__colorName(lineColor)),
+            ("Left Sensor", self.__portName(leftPort)),
+            ("Right Sensor", self.__portName(rightPort)),
+            ("Velocity", velocityPercentage),
+            ("Acceleration", acceleration),
+        ]
 
-        if not self.__inputsValid(self.__lineColorCheck(lineColor), self.__velocityCheck(velocityPercentage, True)):
-            self.__logResult()
+        errors = self.__findErrors(
+            self.__checkOneOf("Line color", lineColor, self.LINE_COLOR_NAMES),
+            self.__checkVelocity(velocityPercentage, allowNegative=True),
+        )
+        if errors:
+            self.__printErrors("Square Up On Line", inputs, errors, callStartTime)
             return
 
         velocity = self.__percentageToUnits(velocityPercentage)
@@ -395,7 +487,7 @@ class RW:
                 rightSensorFoundLine = True
             await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
-        self.__logResult(*self.__sensorReadings(leftPort, rightPort))
+        self.__printResults("Square Up On Line", inputs, self.__sensorReadings(leftPort, rightPort), callStartTime)
 
     async def pidBlackLineFollow(self, rotations, sensorPort, midPointReflectionPercentage, edgeToFollow, proportionalCoef=None, integralCoef=None, derivativeCoef=None, velocityPercentage=None, acceleration=None) -> None:
         proportionalCoef = self.DEFAULTS["PID_P"] if proportionalCoef is None else proportionalCoef
@@ -403,13 +495,26 @@ class RW:
         derivativeCoef = self.DEFAULTS["PID_D"] if derivativeCoef is None else derivativeCoef
         velocityPercentage = self.DEFAULTS["PID_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
-        self.__logStart("PID Black Line Follow", "Rotations", rotations, "Sensor", self.__portName(sensorPort), "Midpoint Reflection", midPointReflectionPercentage,
-                        "Edge", edgeToFollow, "P", proportionalCoef, "I", integralCoef, "D", derivativeCoef,
-                        "Velocity", velocityPercentage, "Acceleration", acceleration)
-        if not self.__inputsValid(self.__rotationsCheck(rotations), self.__velocityCheck(velocityPercentage, False),
-                                  (self.__isNumber(midPointReflectionPercentage) and 0 <= midPointReflectionPercentage <= 100, "Midpoint reflection must be 0 to 100, got " + str(midPointReflectionPercentage)),
-                                  (edgeToFollow in (self.BLACK_LINE_LEFT_EDGE, self.BLACK_LINE_RIGHT_EDGE), "Edge must be RW.BLACK_LINE_LEFT_EDGE or RW.BLACK_LINE_RIGHT_EDGE, got " + str(edgeToFollow))):
-            self.__logResult()
+        callStartTime = time.ticks_ms()
+        inputs = [
+            ("Rotations", rotations),
+            ("Sensor", self.__portName(sensorPort)),
+            ("Midpoint Reflection", midPointReflectionPercentage),
+            ("Edge", edgeToFollow),
+            ("P", proportionalCoef),
+            ("I", integralCoef),
+            ("D", derivativeCoef),
+            ("Velocity", velocityPercentage),
+            ("Acceleration", acceleration),
+        ]
+        errors = self.__findErrors(
+            self.__checkNotZero("Rotations", rotations),
+            self.__checkVelocity(velocityPercentage),
+            self.__checkRange("Midpoint reflection", midPointReflectionPercentage, 0, 100),
+            self.__checkOneOf("Edge", edgeToFollow, (self.BLACK_LINE_LEFT_EDGE, self.BLACK_LINE_RIGHT_EDGE)),
+        )
+        if errors:
+            self.__printErrors("PID Black Line Follow", inputs, errors, callStartTime)
             return
 
         rightPort = self.PORTS["RIGHT_MOTOR"]
@@ -436,5 +541,14 @@ class RW:
             await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__logResult("Actual Rotations Traveled", motor.relative_position(rightPort) / self.DEGREES_PER_ROTATION,
-                         "Final Sensor Reflection", color_sensor.reflection(sensorPort))
+        self.__printResults("PID Black Line Follow", inputs, [("Actual Rotations Traveled", motor.relative_position(rightPort) / self.DEGREES_PER_ROTATION), ("Final Sensor Reflection", color_sensor.reflection(sensorPort))], callStartTime)
+
+    async def thatWasEasy(self, missionNumber=None):
+        if not self.DEBUG:
+            return
+        for frequency, duration in self.RANDOM:
+            await sound.beep(frequency, duration, self.RANDOM_2, waveform=sound.WAVEFORM_SQUARE)
+        print("That was easy!")
+        if missionNumber is not None:
+            print("Mission " + str(missionNumber) + " was a piece of cake.")
+        print("")
