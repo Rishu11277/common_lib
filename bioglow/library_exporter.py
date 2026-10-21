@@ -4,7 +4,7 @@ libraryFile = 'Rockstar_lib.py'
 
 libCode: str = """
 # version date: 10/21/26
-from hub import light_matrix, motion_sensor, port
+from hub import light_matrix, motion_sensor, port, sound
 import runloop, motor, motor_pair, time, color_sensor, color
 
 class RW:
