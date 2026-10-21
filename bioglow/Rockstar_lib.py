@@ -1,5 +1,5 @@
-from hub import light_matrix, motion_sensor, port
-import runloop, motor, motor_pair, time, color_sensor, color, sound
+from hub import light_matrix, motion_sensor, port, sound
+import runloop, motor, motor_pair, time, color_sensor, color
 
 class RW:
     MOTOR_MAX_VELOCITIES = {"SMALL": 660, "MEDIUM": 1110, "LARGE": 1050}
