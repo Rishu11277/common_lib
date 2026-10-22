@@ -3,7 +3,7 @@ import sys, os
 libraryFile = 'Rockstar_lib.py'
 
 libCode: str = """
-# version date: 10/21/26
+# version date: 10/22/26
 from hub import light_matrix, motion_sensor, port, sound
 import runloop, motor, motor_pair, time, color_sensor, color
 
@@ -14,7 +14,7 @@ class RW:
     BLACK_LINE_RIGHT_EDGE = "Right"
     BLACK_LINE_LEFT_EDGE = "Left"
     RANDOM = [(523, 60), (659, 60), (784, 60), (1047, 60), (1319, 60), (1568, 250)]
-    RANDOM_2 = 100
+    RANDOM_OTHER = 100
 
     YAW_SCALE = -0.1
     YAW_RESET_DELAY = 0.1
@@ -553,7 +553,7 @@ class RW:
         if not self.DEBUG:
             return
         for frequency, duration in self.RANDOM:
-            await sound.beep(frequency, duration, self.RANDOM_2, waveform=sound.WAVEFORM_SQUARE)
+            await sound.beep(frequency, duration, self.RANDOM_OTHER, waveform=sound.WAVEFORM_SQUARE)
         print("That was easy!")
         if missionNumber is not None:
             print("Mission " + str(missionNumber) + " was a piece of cake.")
