@@ -8,7 +8,7 @@ class RW:
     BLACK_LINE_RIGHT_EDGE = "Right"
     BLACK_LINE_LEFT_EDGE = "Left"
     RANDOM = [(523, 60), (659, 60), (784, 60), (1047, 60), (1319, 60), (1568, 250)]
-    RANDOM_2 = 100
+    RANDOM_OTHER = 100
 
     YAW_SCALE = -0.1
     YAW_RESET_DELAY = 0.1
@@ -547,7 +547,7 @@ class RW:
         if not self.DEBUG:
             return
         for frequency, duration in self.RANDOM:
-            await sound.beep(frequency, duration, self.RANDOM_2, waveform=sound.WAVEFORM_SQUARE)
+            await sound.beep(frequency, duration, self.RANDOM_OTHER, waveform=sound.WAVEFORM_SQUARE)
         print("That was easy!")
         if missionNumber is not None:
             print("Mission " + str(missionNumber) + " was a piece of cake.")
