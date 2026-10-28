@@ -1,11 +1,10 @@
+// JUST THE SENSOR CODE! NO MOTOR FUNCTIONALITY
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <GravityTDS.h>
 #include <math.h>
-
 constexpr auto TDS_PIN = A1;
 constexpr auto TEMPERATURE_PIN = 2;
-
 OneWire wire(TEMPERATURE_PIN);
 DallasTemperature probe(&wire);
 GravityTDS tds;
