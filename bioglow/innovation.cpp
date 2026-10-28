@@ -3,7 +3,10 @@
 #include <GravityTDS.h>
 #include <math.h>
 
-OneWire wire(2);
+constexpr auto TDS_PIN = A1;
+constexpr auto TEMPERATURE_PIN = 2;
+
+OneWire wire(TEMPERATURE_PIN);
 DallasTemperature probe(&wire);
 GravityTDS tds;
 
@@ -12,7 +15,7 @@ void setup() {
   analogReadResolution(10);
   probe.begin();
 
-  tds.setPin(A1);
+  tds.setPin(TDS_PIN);
   tds.setAref(5.0);
   tds.setAdcRange(1024);
   tds.begin();
