@@ -1,59 +1,50 @@
-// JUST THE SENSOR CODE! NO MOTOR FUNCTIONALITY
+// JUST THE SENSOR CODE! NO MOTOR FUNCTIONALITY (Uno R3)
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <GravityTDS.h>
-#include <math.h>
-constexpr auto TDS_PIN = A1;
-constexpr auto TEMPERATURE_PIN = 2;
+
+const uint8_t TDS_PIN = A1;
+const uint8_t TEMPERATURE_PIN = 2;
+
 OneWire wire(TEMPERATURE_PIN);
 DallasTemperature probe(&wire);
 GravityTDS tds;
 
 void setup() {
   Serial.begin(115200);
-  analogReadResolution(10);
   probe.begin();
 
   tds.setPin(TDS_PIN);
-  tds.setAref(5.0);
-  tds.setAdcRange(1024);
+  tds.setAref(5.0);       // Uno R3 runs at 5V
+  tds.setAdcRange(1024);  // Uno R3 ADC is 10-bit
   tds.begin();
 
-  Serial.println("Calibration: use Newline; send enter, cal:707, exit separately.");
-  Serial.println("Use cal:707 only with 707 ppm calibration solution.");
+  Serial.println(F("Calibration: use Newline; send enter, cal:707, exit separately."));
+  Serial.println(F("Use cal:707 only with 707 ppm calibration solution."));
 }
 
 void loop() {
-  DeviceAddress address;
-  float temp = DEVICE_DISCONNECTED_C;
+  probe.requestTemperatures();
+  float temp = probe.getTempCByIndex(0);
 
-  if (probe.getAddress(address, 0)) {
-    if (probe.requestTemperaturesByAddress(address).result) {
-      temp = probe.getTempC(address);
-    }
-  }
-
-  if (!isfinite(temp) || temp == DEVICE_DISCONNECTED_C) {
-    tds.cancelCalibration();
-    Serial.println("Temperature sensor error; TDS unavailable.");
-    probe.begin();
+  if (isnan(temp) || temp == DEVICE_DISCONNECTED_C) {
+    Serial.println(F("Temperature sensor error; TDS unavailable."));
+    probe.begin();  // try to re-detect the sensor
   } else if (temp < 0 || temp > 55) {
-    tds.cancelCalibration();
-    Serial.println("Temperature outside 0-55 C; TDS unavailable.");
+    Serial.println(F("Temperature outside 0-55 C; TDS unavailable."));
   } else {
     tds.setTemperature(temp);
     tds.update();
     float ppm = tds.getTdsValue();
 
-    if (!isfinite(ppm) || ppm < 0) {
-      tds.cancelCalibration();
-      Serial.println("Invalid TDS reading.");
+    if (isnan(ppm) || ppm < 0) {
+      Serial.println(F("Invalid TDS reading."));
     } else {
-      Serial.print("Temperature: ");
+      Serial.print(F("Temperature: "));
       Serial.print(temp, 2);
-      Serial.print(" C | TDS: ");
+      Serial.print(F(" C | TDS: "));
       Serial.print(ppm, 0);
-      Serial.println(" ppm");
+      Serial.println(F(" ppm"));
     }
   }
 
