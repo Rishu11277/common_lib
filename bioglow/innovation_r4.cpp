@@ -58,8 +58,6 @@ void loop() {
     probe.begin();
     probe.setWaitForConversion(false);
     probe.requestTemperatures();
-  } else if (temp < 0 || temp > 55) {
-    Serial.print(F("Temp outside 0-55 C; TDS unavailable."));
   } else {
     tds.setTemperature(temp);
     tds.update();
