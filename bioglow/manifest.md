@@ -203,6 +203,8 @@ await robot.arcTurn(42, 85, velocityPercentage=-50)
 | `radiusInCm` | 0 or more. 0 equals a spin turn |
 | `velocityPercentage` | -100 to 100, not 0. Default 20. Negative drives backward |
 
+Arc motion matches the reference `arcTurn` in [byronrockstars/common_lib](https://github.com/byronrockstars/common_lib/blob/a798ccf7be8537dd5288f70bab7827ebe3c58162/edu/byron/bioglow/rockstar_lib.py#L84): steering is selected from the angle's sign, and completion uses the magnitude of the gyro angle. Reversing velocity keeps the steering value and reverses the physical heading change.
+
 Proportional turn that slows down near the target for better accuracy:
 
 ```python
@@ -279,7 +281,7 @@ await robot.squareUpOnLine(lineColor, velocityPercentage=15, acceleration=500)
 
 For best results, run slowly, back off the line, and run it a second time.
 
-Follow a black line using PID correction (forward only):
+Follow a black line using PID correction. Positive rotations move forward; negative rotations move backward. Keep `velocityPercentage` positive for either direction.
 
 ```python
 await robot.pidBlackLineFollow(rotations, sensorPort, midPointReflectionPercentage, edgeToFollow)
@@ -289,6 +291,7 @@ Example:
 
 ```python
 await robot.pidBlackLineFollow(1.4, port.F, 60, RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
+await robot.pidBlackLineFollow(-1.4, port.F, 60, RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
 ```
 
 Optional settings:

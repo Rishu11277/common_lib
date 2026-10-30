@@ -2,6 +2,7 @@ from hub import port
 import runloop
 import color
 import motor
+import motor_pair
 from Rockstar_lib import RW
 import time
 
@@ -106,6 +107,7 @@ async def _runMission15(robot: RW) -> None:
     await robot.moveStraightGyro(-2, velocityPercentage=100)
     return
 async def main():
+    motor_pair.pair(motor_pair.PAIR_1, port.A, port.B)
     robot = RW(robot="Misty", leftMotorPort=port.A, rightMotorPort=port.B, leftSensorPort=port.E, rightSensorPort=port.F)
     # await _runMission15(robot)
 

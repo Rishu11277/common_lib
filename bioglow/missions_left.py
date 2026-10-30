@@ -57,6 +57,7 @@ async def runMission2and3(robot: RW) -> None:
 
 
 async def main():
+    motor_pair.pair(motor_pair.PAIR_1, port.A, port.B)
     robot = RW(
         robot="Misty",
         leftMotorPort=port.A,

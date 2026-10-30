@@ -216,15 +216,19 @@ class RW:
             self.__printErrors("Arc Turn", inputs, errors, callStartTime)
             return
 
-        velocity = self.__percentageToUnits(velocityPercentage)
+        # Preserve the reference arc's calculation order and reset timing.
+        velocity = velocityPercentage / 100 * self.WHEEL_MAX_VELOCITY
         halfWheelBase = self.WHEEL_BASE_IN_CENTIMETERS / 2.0
-        wheelRadiusRatio = (radiusInCm - halfWheelBase) / (radiusInCm + halfWheelBase)
+        innerWheelRadius = radiusInCm - halfWheelBase
+        outerWheelRadius = radiusInCm + halfWheelBase
+        wheelRadiusRatio = innerWheelRadius / outerWheelRadius
 
         steering = int((1 - wheelRadiusRatio) * 50)
         if degrees < 0:
             steering = -steering
 
-        await self.__resetYaw()
+        motion_sensor.reset_yaw(0)
+        time.sleep(0.1)
         motor_pair.move(motor_pair.PAIR_1, steering, velocity=int(velocity))
         await runloop.until(lambda: self.__turnCompleted(degrees))
         motor_pair.stop(motor_pair.PAIR_1)
@@ -347,7 +351,7 @@ class RW:
         degrees = rotations * self.DEGREES_PER_ROTATION
         motor.reset_relative_position(rightPort, 0)
         brakeStartDistance = degrees * brakeStartPercentage
-        endSpeed = self.WHEEL_MAX_VELOCITY * self.END_SPEED_PERCENTAGE
+        endSpeed = min(abs(velocity), self.WHEEL_MAX_VELOCITY * self.END_SPEED_PERCENTAGE)
 
         while direction * motor.relative_position(rightPort) < direction * degrees:
             correction = int(self.__yaw() * correctionMultiplier)
@@ -524,21 +528,22 @@ class RW:
             return
 
         rightPort = self.PORTS["RIGHT_MOTOR"]
-        velocity = self.__percentageToUnits(velocityPercentage)
+        direction = 1 if rotations > 0 else -1
+        velocity = self.__percentageToUnits(velocityPercentage) * direction
         degreesToMove = rotations * self.DEGREES_PER_ROTATION
         motor.reset_relative_position(rightPort, 0)
 
         lastError = 0.0
         integral = 0.0
 
-        while abs(motor.relative_position(rightPort)) < abs(degreesToMove):
+        while direction * motor.relative_position(rightPort) < abs(degreesToMove):
             error = midPointReflectionPercentage - color_sensor.reflection(sensorPort)
             integral = max(-self.INTEGRAL_LIMIT, min(self.INTEGRAL_LIMIT, integral + error))
             derivative = error - lastError
             lastError = error
 
             turnCorrectionPercentage = proportionalCoef * error + integralCoef * integral + derivativeCoef * derivative
-            turnCorrectionAmount = self.__percentageToUnits(turnCorrectionPercentage)
+            turnCorrectionAmount = self.__percentageToUnits(turnCorrectionPercentage) * direction
 
             if edgeToFollow == self.BLACK_LINE_RIGHT_EDGE:
                 motor_pair.move_tank(motor_pair.PAIR_1, int(velocity + turnCorrectionAmount), int(velocity - turnCorrectionAmount), acceleration=acceleration)
