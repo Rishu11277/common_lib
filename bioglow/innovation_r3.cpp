@@ -14,6 +14,9 @@ constexpr float VREF = 5.0f;
 constexpr uint32_t READ_INTERVAL_MS = 1000;
 constexpr uint8_t TURBIDITY_SAMPLES = 32;
 
+constexpr float TURBIDITY_LIMIT_NTU = 25.0f;
+constexpr float TDS_LIMIT_PPM = 500.0f;
+
 OneWire wire(TEMPERATURE_PIN);
 DallasTemperature probe(&wire);
 GravityTDS tds;
@@ -49,6 +52,16 @@ void loop() {
   }
   float turbidityV = (turbiditySum / (float)TURBIDITY_SAMPLES) * (VREF / ADC_MAX);
 
+  float ntu;
+  if (turbidityV < 2.5f) ntu = 3000.0f;
+  else {
+    ntu = -1120.4f * turbidityV * turbidityV + 5742.3f * turbidityV - 4352.9f;
+    if (ntu < 0) ntu = 0;
+  }
+
+  bool ppmValid = false;
+  float ppm = 0;
+
   if (isnan(temp) || temp == DEVICE_DISCONNECTED_C) {
     Serial.print(F("Temp sensor error; TDS unavailable."));
     probe.begin();
@@ -57,16 +70,20 @@ void loop() {
   } else {
     tds.setTemperature(temp);
     tds.update();
-    float ppm = tds.getTdsValue();
+    ppm = tds.getTdsValue();
+    ppmValid = !isnan(ppm) && ppm >= 0;
 
     Serial.print(F("Temperature: "));
     Serial.print(temp, 2);
     Serial.print(F(" C | TDS: "));
-    if (isnan(ppm) || ppm < 0) Serial.print(F("invalid"));
+    if (!ppmValid) Serial.print(F("invalid"));
     else { Serial.print(ppm, 0); Serial.print(F(" ppm")); }
   }
 
   Serial.print(F(" | Turbidity: "));
-  Serial.print(turbidityV, 3);
-  Serial.println(F(" V"));
+  Serial.print(ntu, 1);
+  Serial.print(F(" NTU"));
+
+  bool bad = ntu >= TURBIDITY_LIMIT_NTU || (ppmValid && ppm >= TDS_LIMIT_PPM);
+  Serial.println(bad ? F(" | BAD") : F(" | GOOD"));
 }
