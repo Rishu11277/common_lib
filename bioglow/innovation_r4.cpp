@@ -1,37 +1,124 @@
 #include <Arduino.h>
-
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <GravityTDS.h>
 
-constexpr uint8_t TDS_PIN = A1;
-constexpr uint8_t TEMPERATURE_PIN = 2;
-constexpr uint8_t TURBIDITY_PIN = A2;
+const int TEMP_PIN = 2;
+const int TURBIDITY_PIN = A3;
+const int TDS_PIN = A4;
 
-constexpr uint8_t ADC_BITS = 14;
-constexpr float ADC_MAX = 16383.0f;
-constexpr float VREF = 5.0f;
+const int ADC_BITS = 14;
+const float VREF = 5.0;
+const float ADC_MAX = 16383.0;
 
-constexpr uint32_t READ_INTERVAL_MS = 1000;
-constexpr uint8_t TURBIDITY_SAMPLES = 32;
+const int GROUPS = 128;
+const int GROUP_SIZE = 64;
+const float TRIM_FRACTION = 0.10;
+const int TRIM = GROUPS * TRIM_FRACTION;
 
-constexpr float TURBIDITY_LIMIT_NTU = 25.0f;
-constexpr float TDS_LIMIT_PPM = 500.0f;
+const float TURBIDITY_OFFSET = 0.0;
+const float TURBIDITY_LIMIT = 25.0;
+const float TDS_LIMIT = 500.0;
+const float HYSTERESIS = 0.9;
 
-OneWire wire(TEMPERATURE_PIN);
+const float NTU_A = -1120.4;
+const float NTU_B = 5742.3;
+const float NTU_C = -4352.9;
+const float NTU_MIN_VOLTAGE = 2.5;
+const float NTU_MAX = 3000.0;
+
+const float TEMP_MIN = -5.0;
+const float TEMP_MAX = 80.0;
+
+const unsigned long READ_INTERVAL_MS = 1000;
+
+enum Status { GOOD, BAD, UNKNOWN };
+
+OneWire wire(TEMP_PIN);
 DallasTemperature probe(&wire);
 GravityTDS tds;
 
-uint32_t lastRead = 0;
+bool turbidityBad = false;
+bool tdsBad = false;
+unsigned long lastRead = 0;
+
+float readTurbiditySample() {
+  return analogRead(TURBIDITY_PIN) * VREF / ADC_MAX;
+}
+
+float readTdsSample() {
+  tds.update();
+  return tds.getTdsValue();
+}
+
+float measure(float (*readSample)()) {
+  float groups[GROUPS];
+
+  for (int g = 0; g < GROUPS; g++) {
+    float sum = 0;
+    for (int i = 0; i < GROUP_SIZE; i++) sum += readSample();
+    float average = sum / GROUP_SIZE;
+
+    int i = g - 1;
+    while (i >= 0 && groups[i] > average) {
+      groups[i + 1] = groups[i];
+      i--;
+    }
+    groups[i + 1] = average;
+  }
+
+  float sum = 0;
+  for (int g = TRIM; g < GROUPS - TRIM; g++) sum += groups[g];
+  return sum / (GROUPS - 2 * TRIM);
+}
+
+float readTemperature() {
+  float temp = probe.getTempCByIndex(0);
+  probe.requestTemperatures();
+  return temp;
+}
+
+bool isValidTemperature(float temp) {
+  return !isnan(temp) && temp > TEMP_MIN && temp < TEMP_MAX;
+}
+
+float voltageToNtu(float voltage) {
+  if (voltage < NTU_MIN_VOLTAGE) return NTU_MAX;
+  return max(0.0f, NTU_A * voltage * voltage + NTU_B * voltage + NTU_C);
+}
+
+bool isOverLimit(bool valid, bool wasBad, float value, float limit) {
+  return valid && value >= limit * (wasBad ? HYSTERESIS : 1.0);
+}
+
+Status getStatus(bool turbidityValid, bool tdsValid) {
+  if (turbidityBad || tdsBad) return BAD;
+  if (!turbidityValid || !tdsValid) return UNKNOWN;
+  return GOOD;
+}
+
+void printReadings(float temp, float ppm, float ntu, float voltage, Status status) {
+  Serial.print("Temp: ");
+  Serial.print(temp);
+  Serial.print(" C | TDS: ");
+  if (isnan(ppm)) Serial.print("UNKNOWN");
+  else Serial.print(ppm);
+  Serial.print(" ppm | Turbidity: ");
+  if (isnan(ntu)) Serial.print("UNKNOWN");
+  else Serial.print(ntu);
+  Serial.print(" NTU (");
+  Serial.print(voltage, 4);
+  Serial.print(" V) | ");
+
+  if (status == GOOD) Serial.println("GOOD");
+  else if (status == BAD) Serial.println("BAD");
+  else Serial.println("UNKNOWN");
+}
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial && millis() < 3000);
-
   analogReadResolution(ADC_BITS);
-
   probe.begin();
-  probe.setResolution(12);
   probe.setWaitForConversion(false);
   probe.requestTemperatures();
 
@@ -39,55 +126,29 @@ void setup() {
   tds.setAref(VREF);
   tds.setAdcRange(ADC_MAX + 1);
   tds.begin();
-
-  lastRead = millis();
 }
 
 void loop() {
   if (millis() - lastRead < READ_INTERVAL_MS) return;
   lastRead = millis();
 
-  float temp = probe.getTempCByIndex(0);
-  probe.requestTemperatures();
+  float temp = readTemperature();
+  bool tempValid = isValidTemperature(temp);
 
-  uint32_t turbiditySum = 0;
-  for (uint8_t i = 0; i < TURBIDITY_SAMPLES; i++) {
-    turbiditySum += analogRead(TURBIDITY_PIN);
-  }
-  float turbidityV = (turbiditySum / (float)TURBIDITY_SAMPLES) * (VREF / ADC_MAX);
+  float voltage = measure(readTurbiditySample) + TURBIDITY_OFFSET;
+  float ntu = voltageToNtu(voltage);
+  bool turbidityValid = !isnan(ntu);
 
-  float ntu;
-  if (turbidityV < 2.5f) ntu = 3000.0f;
-  else {
-    ntu = -1120.4f * turbidityV * turbidityV + 5742.3f * turbidityV - 4352.9f;
-    if (ntu < 0) ntu = 0;
-  }
-
-  bool ppmValid = false;
-  float ppm = 0;
-
-  if (isnan(temp) || temp == DEVICE_DISCONNECTED_C) {
-    Serial.print(F("Temp sensor error; TDS unavailable."));
-    probe.begin();
-    probe.setWaitForConversion(false);
-    probe.requestTemperatures();
-  } else {
+  float ppm = NAN;
+  if (tempValid) {
     tds.setTemperature(temp);
-    tds.update();
-    ppm = tds.getTdsValue();
-    ppmValid = !isnan(ppm) && ppm >= 0;
-
-    Serial.print(F("Temperature: "));
-    Serial.print(temp, 2);
-    Serial.print(F(" C | TDS: "));
-    if (!ppmValid) Serial.print(F("invalid"));
-    else { Serial.print(ppm, 0); Serial.print(F(" ppm")); }
+    ppm = measure(readTdsSample);
   }
+  bool tdsValid = !isnan(ppm) && ppm >= 0;
+  if (!tdsValid) ppm = NAN;
 
-  Serial.print(F(" | Turbidity: "));
-  Serial.print(ntu, 1);
-  Serial.print(F(" NTU"));
+  turbidityBad = isOverLimit(turbidityValid, turbidityBad, ntu, TURBIDITY_LIMIT);
+  tdsBad = isOverLimit(tdsValid, tdsBad, ppm, TDS_LIMIT);
 
-  bool bad = ntu >= TURBIDITY_LIMIT_NTU || (ppmValid && ppm >= TDS_LIMIT_PPM);
-  Serial.println(bad ? F(" | BAD") : F(" | GOOD"));
+  printReadings(temp, ppm, ntu, voltage, getStatus(turbidityValid, tdsValid));
 }
