@@ -32,7 +32,7 @@ const float TEMP_MAX = 80.0;
 
 const unsigned long READ_INTERVAL_MS = 1000;
 
-enum Status { GOOD, BAD, UNKNOWN };
+enum Status { GOOD, BAD, UNKNOWN, UNKNOWN_GOOD, UNKNOWN_BAD };
 
 OneWire wire(TEMP_PIN);
 DallasTemperature probe(&wire);
@@ -40,6 +40,8 @@ GravityTDS tds;
 
 bool turbidityBad = false;
 bool tdsBad = false;
+bool turbidityRemembered = false;
+bool tdsRemembered = false;
 unsigned long lastRead = 0;
 
 float readTurbiditySample() {
@@ -87,19 +89,26 @@ float voltageToNtu(float voltage) {
   return max(0.0f, NTU_A * voltage * voltage + NTU_B * voltage + NTU_C);
 }
 
-bool isOverLimit(bool valid, bool wasBad, float value, float limit) {
-  return valid && value >= limit * (wasBad ? HYSTERESIS : 1.0);
+bool updateAlarm(bool valid, bool wasBad, float value, float limit) {
+  if (!valid) return wasBad;
+  return value >= limit * (wasBad ? HYSTERESIS : 1.0);
 }
 
 Status getStatus(bool turbidityValid, bool tdsValid) {
-  if (turbidityBad || tdsBad) return BAD;
-  if (!turbidityValid || !tdsValid) return UNKNOWN;
-  return GOOD;
+  if ((turbidityValid && turbidityBad) || (tdsValid && tdsBad)) return BAD;
+  if (turbidityValid && tdsValid) return GOOD;
+
+  bool missingRemembered = (turbidityValid || turbidityRemembered) && (tdsValid || tdsRemembered);
+  if (!missingRemembered) return UNKNOWN;
+
+  bool rememberedBad = (!turbidityValid && turbidityBad) || (!tdsValid && tdsBad);
+  return rememberedBad ? UNKNOWN_BAD : UNKNOWN_GOOD;
 }
 
 void printReadings(float temp, float ppm, float ntu, float voltage, Status status) {
   Serial.print("Temp: ");
-  Serial.print(temp);
+  if (isValidTemperature(temp)) Serial.print(temp);
+  else Serial.print("UNKNOWN");
   Serial.print(" C | TDS: ");
   if (isnan(ppm)) Serial.print("UNKNOWN");
   else Serial.print(ppm);
@@ -112,6 +121,8 @@ void printReadings(float temp, float ppm, float ntu, float voltage, Status statu
 
   if (status == GOOD) Serial.println("GOOD");
   else if (status == BAD) Serial.println("BAD");
+  else if (status == UNKNOWN_GOOD) Serial.println("UNKNOWN/GOOD");
+  else if (status == UNKNOWN_BAD) Serial.println("UNKNOWN/BAD");
   else Serial.println("UNKNOWN");
 }
 
@@ -126,6 +137,8 @@ void setup() {
   tds.setAref(VREF);
   tds.setAdcRange(ADC_MAX + 1);
   tds.begin();
+
+  lastRead = millis();
 }
 
 void loop() {
@@ -147,8 +160,10 @@ void loop() {
   bool tdsValid = !isnan(ppm) && ppm >= 0;
   if (!tdsValid) ppm = NAN;
 
-  turbidityBad = isOverLimit(turbidityValid, turbidityBad, ntu, TURBIDITY_LIMIT);
-  tdsBad = isOverLimit(tdsValid, tdsBad, ppm, TDS_LIMIT);
+  turbidityBad = updateAlarm(turbidityValid, turbidityBad, ntu, TURBIDITY_LIMIT);
+  tdsBad = updateAlarm(tdsValid, tdsBad, ppm, TDS_LIMIT);
+  turbidityRemembered = turbidityRemembered || turbidityValid;
+  tdsRemembered = tdsRemembered || tdsValid;
 
   printReadings(temp, ppm, ntu, voltage, getStatus(turbidityValid, tdsValid));
 }
