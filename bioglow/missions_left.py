@@ -10,11 +10,12 @@ from Rockstar_lib import RW
 async def _runMission1(robot: RW) -> None:
     # Mission 1 (Drone Survey)
     await robot.moveForward(rotations=4.76, velocityPercentage=100)
-    await robot.moveForward(rotations=-2.1, velocityPercentage=100)
-    await robot.turn(-23.5, velocityPercentage=25, turnType="PIVOT")
+    await robot.moveForward(rotations=-2.2, velocityPercentage=100)
+    await robot.turn(-23.56, velocityPercentage=25, turnType="PIVOT")
     await robot.moveForward(rotations=2.95, velocityPercentage=100)
-    await robot.turn(45, velocityPercentage=50, turnType="CAR")
-    # await robot.moveForward(rotations=3, velocityPercentage=100, acceleration=10000, deceleration=4000)
+    # The original mission runs this car turn at 554 degrees per second.
+    await robot.turn(45, velocityPercentage=49.91, turnType="CAR")
+    await robot.moveForward(rotations=3, velocityPercentage=100, acceleration=10000, deceleration=4000)
     return
 
 

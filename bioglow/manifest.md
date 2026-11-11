@@ -114,7 +114,7 @@ await robot.moveForward(rotations, velocityPercentage, acceleration=500, deceler
 | `rotations` | Any number except 0 |
 | `velocityPercentage` | 1 to 100 |
 
-Move straight with gyro correction. The robot slows down near the end.
+Move straight with gyro correction. Near the end, the braking calculation uses 10% of maximum wheel speed as its floor. A move that starts below that speed can speed up during braking.
 
 ```python
 await robot.moveStraightGyro(rotations, velocityPercentage)
@@ -384,4 +384,4 @@ Creating the robot with `RW(...)` is a normal call and does not use `await`.
 
 Run the whole program once with `runloop.run(main())`.
 
-Every control loop yields to the hub every 10 ms, so other tasks (like an arm motor started without `await`) keep running during a move.
+`moveStraightUntilLineGyro()` and `pidBlackLineFollow()` yield between control updates. The gyro distance, proportional turn, and line squaring loops update continuously. `turn()`, `arcTurn()`, and `proportionalTurn()` wait after resetting yaw before starting the motors.

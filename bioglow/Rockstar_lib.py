@@ -173,7 +173,8 @@ class RW:
             return
         velocity = int(self.__percentageToUnits(velocityPercentage))
 
-        await self.__resetYaw()
+        motion_sensor.reset_yaw(0)
+        time.sleep(self.YAW_RESET_DELAY)
         if turnType == "SPIN":
             if degrees > 0:
                 motor_pair.move_tank(motor_pair.PAIR_1, velocity, -1 * velocity)
@@ -252,7 +253,8 @@ class RW:
             return
         settings = self.PROPORTIONAL_TURN[turnType]
 
-        await self.__resetYaw()
+        motion_sensor.reset_yaw(0)
+        time.sleep(self.YAW_RESET_DELAY)
         minTurnPower = self.WHEEL_MAX_VELOCITY * settings["MIN"]
         maxTurnPower = self.WHEEL_MAX_VELOCITY * settings["MAX"]
         turnStartTime = time.ticks_ms()
@@ -283,8 +285,6 @@ class RW:
             if self.__turnCompleted(degrees):
                 result = "Completed"
                 break
-
-            await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
         motor_pair.stop(motor_pair.PAIR_1)
         self.__printResults("Proportional Turn", inputs, [("Result", result), ("Actual Degrees Turned", self.__yaw())], callStartTime)
@@ -337,7 +337,7 @@ class RW:
             self.__printErrors("Move Straight (Gyro)", inputs, errors, callStartTime)
             return
 
-        await self.__resetYaw()
+        motion_sensor.reset_yaw(0)
 
         direction = 1 if rotations > 0 else -1
         velocity = int(self.__percentageToUnits(abs(velocityPercentage)) * direction)
@@ -345,7 +345,7 @@ class RW:
         degrees = rotations * self.DEGREES_PER_ROTATION
         motor.reset_relative_position(rightPort, 0)
         brakeStartDistance = degrees * brakeStartPercentage
-        endSpeed = min(abs(velocity), self.WHEEL_MAX_VELOCITY * self.END_SPEED_PERCENTAGE)
+        endSpeed = self.WHEEL_MAX_VELOCITY * self.END_SPEED_PERCENTAGE
 
         while direction * motor.relative_position(rightPort) < direction * degrees:
             correction = int(self.__yaw() * correctionMultiplier)
@@ -354,7 +354,6 @@ class RW:
             if direction * degreesTraveled > direction * brakeStartDistance:
                 deceleration = direction * min(abs(velocity) * degreesTraveled/degrees, abs(velocity) - endSpeed)
             motor_pair.move_tank(motor_pair.PAIR_1, velocity + correction - int(deceleration), velocity - correction - int(deceleration), acceleration=acceleration)
-            await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
         motor_pair.stop(motor_pair.PAIR_1)
         self.__printResults("Move Straight (Gyro)", inputs, [("Actual Rotations Traveled", motor.relative_position(rightPort) / self.DEGREES_PER_ROTATION), ("Ending Drift", self.__yaw())], callStartTime)
@@ -489,7 +488,6 @@ class RW:
             if self.__onLine(rightPort, lineColor):
                 motor.stop(self.PORTS["RIGHT_MOTOR"])
                 rightSensorFoundLine = True
-            await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
         self.__printResults("Square Up On Line", inputs, self.__sensorReadings(leftPort, rightPort), callStartTime)
 
