@@ -52,13 +52,13 @@ Every parameter is optional. The values above are the defaults.
 | `acceleration`, `deceleration` | Default acceleration and deceleration for movement |
 | `brakeStartPercentage` | Fraction of a gyro move (0 to 1) after which braking starts |
 | `correctionMultiplier` | Gyro drift correction strength. Must be negative. Typical values are -1 to -5 |
-| `debug` | `True` prints every function call. `False` prints only errors |
+| `debug` | `True` prints movement diagnostics and enables `thatWasEasy()`. `False` keeps input validation errors enabled |
 
 The pair ports and the `RW` motor ports must match.
 
 ## DEBUG OUTPUT
 
-With `debug=True`, every function prints its name, its inputs, its actual results, and how long it took.
+With `debug=True`, movement methods print their name, inputs, measured results, and elapsed time in seconds.
 
 ```
 [Misty] Turn
@@ -69,7 +69,7 @@ With `debug=True`, every function prints its name, its inputs, its actual result
 [Time] 0.62
 ```
 
-If an input is invalid, the function prints every problem, does not move, and returns.
+If input validation fails, the method prints the validation errors and returns before moving, even with `debug=False`.
 
 ```
 [Misty] Turn
@@ -84,16 +84,16 @@ If an input is invalid, the function prints every problem, does not move, and re
 
 ## UNITS
 
-- **Velocity** is always a percentage of max speed.
-- **Rotations** are wheel rotations. Negative rotations move backward.
-- **Degrees** are robot heading. Positive turns right, negative turns left. Allowed range is -179 to 179, not 0.
+- **Velocity** is a percentage of `RW.WHEEL_MAX_VELOCITY`.
+- **Rotations** are wheel rotations. Positive values drive forward and negative values drive backward.
+- **Turn degrees** are relative to the starting heading. The allowed range is -179 to 179, excluding 0. Positive angles turn right for `turn()`, `proportionalTurn()`, and forward arcs. Backward arcs reverse that heading change.
 
 ## MOVEMENT
 
 Move straight without gyro correction.
 
 ```python
-await robot.moveForward(rotations, velocityPercentage)
+await robot.moveForward(rotations)
 ```
 
 Examples:
@@ -112,12 +112,13 @@ await robot.moveForward(rotations, velocityPercentage, acceleration=500, deceler
 | Input | Allowed values |
 |---|---|
 | `rotations` | Any number except 0 |
-| `velocityPercentage` | 1 to 100 |
+| `velocityPercentage` | 1 to 100. Default 40 |
+| `acceleration`, `deceleration` | Default to the values set on the `RW` instance |
 
-Move straight with gyro correction. The robot slows down near the end.
+Move straight with gyro correction. The braking calculation uses 10% of maximum wheel speed as its floor. A move that starts below that speed can speed up during braking.
 
 ```python
-await robot.moveStraightGyro(rotations, velocityPercentage)
+await robot.moveStraightGyro(rotations)
 ```
 
 Examples:
@@ -136,9 +137,10 @@ await robot.moveStraightGyro(rotations, velocityPercentage, acceleration=500, br
 | Input | Allowed values |
 |---|---|
 | `rotations` | Any number except 0 |
-| `velocityPercentage` | -100 to 100, not 0. The sign is ignored; `rotations` sets direction |
-| `brakeStartPercentage` | 0 to 1 |
-| `correctionMultiplier` | Negative |
+| `velocityPercentage` | -100 to 100, excluding 0. Default 40. `rotations` sets direction |
+| `brakeStartPercentage` | 0 to 1. Defaults to the value set on the `RW` instance |
+| `correctionMultiplier` | Negative. Defaults to the value set on the `RW` instance |
+| `acceleration` | Defaults to the value set on the `RW` instance |
 
 Square up against a wall by driving for a set time.
 
@@ -152,7 +154,7 @@ Optional settings:
 await robot.squareUpOnWall(seconds=1.0, velocityPercentage=100, acceleration=1000, deceleration=1000)
 ```
 
-Use a negative velocity to back into a wall.
+`seconds` must be greater than 0. `velocityPercentage` accepts -100 to 100, excluding 0. Use a negative value to back into a wall.
 
 ```python
 await robot.squareUpOnWall(seconds=0.8, velocityPercentage=-50)
@@ -165,7 +167,7 @@ All turns use the gyro and reset the heading to 0 before turning.
 Pivot, spin, or car turn:
 
 ```python
-await robot.turn(degrees, velocityPercentage, turnType)
+await robot.turn(degrees)
 ```
 
 | `turnType` | What happens |
@@ -182,7 +184,7 @@ await robot.turn(-45, 40, "PIVOT")
 await robot.turn(45, 50, "CAR")
 ```
 
-`velocityPercentage` must be 1 to 100.
+`velocityPercentage` accepts 1 to 100 and defaults to 40. `turnType` defaults to `"PIVOT"`.
 
 Arc turn along a curve with a set radius:
 
@@ -208,7 +210,7 @@ Arc motion matches the reference `arcTurn` in [byronrockstars/common_lib](https:
 Proportional turn that slows down near the target for better accuracy:
 
 ```python
-await robot.proportionalTurn(degrees, turnType)
+await robot.proportionalTurn(degrees)
 ```
 
 Examples:
@@ -220,11 +222,11 @@ await robot.proportionalTurn(-45, "PIVOT", velocityPercentage=40, timeout=3)
 
 | Input | Allowed values |
 |---|---|
-| `turnType` | `"PIVOT"` or `"SPIN"` only |
+| `turnType` | `"PIVOT"` or `"SPIN"`. Default `"PIVOT"` |
 | `velocityPercentage` | 1 to 100. Default is 40 for PIVOT, 25 for SPIN |
 | `timeout` | More than 0 seconds. Default 2.0 |
 
-If the turn does not finish before the timeout, it stops and reports `[Result] Timed Out`.
+If the turn reaches the timeout, it stops. With `debug=True`, it prints `[Result] Timed Out`.
 
 ## LINE DETECTION
 
@@ -256,9 +258,10 @@ await robot.moveStraightUntilLine(lineColor, bothSensorsOnLine=False, velocityPe
 await robot.moveStraightUntilLineGyro(lineColor, bothSensorsOnLine=False, velocityPercentage=25, acceleration=500, correctionMultiplier=-3.5)
 ```
 
-- `bothSensorsOnLine=True` waits until both sensors see the line.
-- `velocityPercentage` is -100 to 100, not 0. Negative drives backward.
-- Both return the port of the sensor that found the line, or `-1` if the inputs were invalid.
+- `bothSensorsOnLine=True` waits until both sensors see the line at the same time.
+- `velocityPercentage` accepts -100 to 100, excluding 0. Default 25. Negative values drive backward.
+- Both return a sensor port. If the left sensor sees the line when the result is checked, they return its port. Otherwise they return the right sensor port. If input validation fails, they return `-1`.
+- `acceleration` and the gyro method’s `correctionMultiplier` default to the values set on the `RW` instance.
 
 Square up on a line. Each wheel stops when its sensor sees the line.
 
@@ -278,6 +281,8 @@ Optional settings:
 ```python
 await robot.squareUpOnLine(lineColor, velocityPercentage=15, acceleration=500)
 ```
+
+`velocityPercentage` accepts -100 to 100, excluding 0. Default 15. Negative values drive backward. `acceleration` defaults to the value set on the `RW` instance.
 
 For best results, run slowly, back off the line, and run it a second time.
 
@@ -314,7 +319,8 @@ await robot.pidBlackLineFollow(
 |---|---|
 | `midPointReflectionPercentage` | 0 to 100. Average of the black and white readings |
 | `edgeToFollow` | `RW.BLACK_LINE_LEFT_EDGE` or `RW.BLACK_LINE_RIGHT_EDGE` |
-| `velocityPercentage` | 1 to 100 |
+| `velocityPercentage` | 1 to 100. Default 10 |
+| `acceleration` | Defaults to the value set on the `RW` instance |
 
 Tune P first, then D, then I last.
 
@@ -325,9 +331,9 @@ Change these on the class to adjust behavior for every robot.
 | Constant | Default | Meaning |
 |---|---|---|
 | `WHEEL_MAX_VELOCITY` | 1110 | Max wheel speed that 100% maps to |
-| `LIGHT_REFLECTIONS` | `{"BLACK": 25, "WHITE": 95}` | Reflection thresholds for line detection |
-| `LOOP_DELAY_MS` | 10 | Time between control loop updates |
-| `YAW_RESET_DELAY` | 0.1 | Seconds to wait after resetting the gyro |
+| `LIGHT_REFLECTIONS` | `{"BLACK": 25, "WHITE": 95}` | Black is detected below 25 and white above 95 |
+| `LOOP_DELAY_MS` | 10 | Milliseconds between updates in loops that call `runloop.sleep_ms()` |
+| `YAW_RESET_DELAY` | 0.1 | Seconds to wait after resetting yaw in `turn()`, `proportionalTurn()`, and `moveStraightUntilLineGyro()`. `arcTurn()` uses a fixed 0.1-second delay |
 | `CAR_TURN_WHEEL_RATIOS` | `{"OUTER": 0.75, "INNER": 0.25}` | Wheel speeds for CAR turns |
 | `PROPORTIONAL_TURN` | See file | Min power, max power, divisor, and default velocity for proportional turns |
 | `DEFAULTS` | See file | Default values for optional parameters |
@@ -340,14 +346,14 @@ RW.LIGHT_REFLECTIONS["BLACK"] = 20
 
 ## COMPLETION SOUND
 
-Play the library's completion sound. It does nothing when the robot was created with `debug=False`.
+With `debug=True`, `thatWasEasy()` plays a short tune and prints `That was easy!`. With `debug=False`, the method returns immediately.
 
 ```python
 await robot.thatWasEasy()
 await robot.thatWasEasy(missionNumber=3)
 ```
 
-`missionNumber` is optional. When provided, it is printed after the sound.
+Pass an optional `missionNumber` to include it in the output.
 
 ## COMPLETE STARTER PROGRAM
 
@@ -374,7 +380,7 @@ runloop.run(main())
 
 ## IMPORTANT NOTES
 
-All movement functions are asynchronous. Call them with `await` from inside an `async` function.
+All movement methods and `thatWasEasy()` are asynchronous. Call them with `await` from inside an `async` function.
 
 ```python
 await robot.moveForward(1, velocityPercentage=50)
@@ -384,4 +390,4 @@ Creating the robot with `RW(...)` is a normal call and does not use `await`.
 
 Run the whole program once with `runloop.run(main())`.
 
-Every control loop yields to the hub every 10 ms, so other tasks (like an arm motor started without `await`) keep running during a move.
+`moveStraightUntilLineGyro()` and `pidBlackLineFollow()` yield between control updates. The gyro distance, proportional turn, and line squaring loops update continuously. `turn()`, `arcTurn()`, and `proportionalTurn()` pause synchronously after resetting yaw before starting the motors.

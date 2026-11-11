@@ -1,4 +1,6 @@
 from hub import port
+import color
+import hub
 import motor
 import motor_pair
 import runloop
@@ -10,11 +12,12 @@ from Rockstar_lib import RW
 async def _runMission1(robot: RW) -> None:
     # Mission 1 (Drone Survey)
     await robot.moveForward(rotations=4.76, velocityPercentage=100)
-    await robot.moveForward(rotations=-2.1, velocityPercentage=100)
-    await robot.turn(-23.5, velocityPercentage=25, turnType="PIVOT")
+    await robot.moveForward(rotations=-2.2, velocityPercentage=100)
+    await robot.turn(-23.56, velocityPercentage=25, turnType="PIVOT")
     await robot.moveForward(rotations=2.95, velocityPercentage=100)
-    await robot.turn(45, velocityPercentage=50, turnType="CAR")
-    # await robot.moveForward(rotations=3, velocityPercentage=100, acceleration=10000, deceleration=4000)
+    # The original mission runs this car turn at 554 degrees per second.
+    await robot.turn(45, velocityPercentage=49.91, turnType="CAR")
+    await robot.moveForward(rotations=3, velocityPercentage=100, acceleration=10000, deceleration=4000)
     return
 
 
@@ -70,17 +73,47 @@ async def runMission2and3and1(robot: RW) -> None:
 async def main() -> None:
     motor_pair.pair(motor_pair.PAIR_1, port.A, port.B)
     robot = RW(
-        robot="Ash",
+        robot="Misty",
         leftMotorPort=port.A,
         rightMotorPort=port.B,
         leftSensorPort=port.E,
         rightSensorPort=port.F,
     )
 
-    # await _runMission3(robot)
-    # await runMission2and3(robot)
-    # await _runMission1(robot)
-    await runMission2and3and1(robot)
+    missionSelected = 0
+    colors = [color.GREEN, color.AZURE, color.ORANGE, color.MAGENTA, color.YELLOW, color.PURPLE]
+    alphabet = "ABCDEFGHIJKLMN"
+    hub.light.color(0, colors[0])
+    hub.light.color(1, colors[0])
+    hub.light_matrix.write(alphabet[0])
+
+    while True:
+        if hub.button.pressed(hub.button.RIGHT):
+            time.sleep(0.25)
+            missionSelected += 1
+            hub.light_matrix.write(alphabet[missionSelected % len(alphabet)])
+            hub.light.color(0, colors[missionSelected % len(colors)])
+            hub.light.color(1, colors[missionSelected % len(colors)])
+            hub.sound.beep(freq=85, volume=100, duration=250)
+        elif hub.button.pressed(hub.button.LEFT):
+            time.sleep(0.25)
+            missionSelected -= 1
+            hub.light_matrix.write(alphabet[missionSelected % len(alphabet)])
+            hub.light.color(0, colors[missionSelected % len(colors)])
+            hub.light.color(1, colors[missionSelected % len(colors)])
+            hub.sound.beep(freq=300, volume=100, duration=250)
+        elif hub.button.pressed(3):
+            if missionSelected == 0:
+                print("Running mission 0.")
+                await runMission2and3and1(robot)
+            elif missionSelected == 1:
+                print("Running mission 1.")
+                await _runMission3(robot)
+            elif missionSelected == 2:
+                print("Running mission 2.")
+                await _runMission1(robot)
+            elif missionSelected == 3:
+                print("Running mission 3.")
 
 
 runloop.run(main())

@@ -49,9 +49,10 @@ async def _runMission6(robot: RW, forwardRotations=0.51) -> None:
     await robot.proportionalTurn(-82, velocityPercentage=20, turnType="SPIN")
     # await robot.pidBlackLineFollow(1.4, sensorPort=port.F, midPointReflectionPercentage=60, edgeToFollow=RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, velocityPercentage=8) #before derivative correction
     # await robot.pidBlackLineFollow(1.4, sensorPort=port.F, midPointReflectionPercentage=60, edgeToFollow=RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
-    await robot.moveStraightGyro(1.8, velocityPercentage=50, acceleration=400, brakeStartPercentage=0.8, correctionMultiplier=-3.5)
-    await robot.proportionalTurn(130, velocityPercentage=30, turnType="SPIN")
-    await robot.moveForward(0.92, velocityPercentage=10)
+    await robot.moveStraightGyro(1.7, velocityPercentage=50, acceleration=400, brakeStartPercentage=0.8, correctionMultiplier=-3.5)
+    await robot.proportionalTurn(110, velocityPercentage=30, turnType="SPIN")
+    await robot.squareUpOnLine(lineColor=color.BLACK, velocityPercentage=15, acceleration=500)
+    await robot.moveForward(0.5, velocityPercentage=10)
     await robot.squareUpOnLine(lineColor=color.BLACK, velocityPercentage=-15, acceleration=500)
 
     return
@@ -94,7 +95,7 @@ async def _runMission12(robot: RW) -> None:
     await motor.run_for_degrees(port.D, -120, 400)
     await robot.moveStraightGyro(-0.37, velocityPercentage=30)
     await robot.proportionalTurn(-30, turnType="PIVOT")
-    await robot.arcTurn(42, 30, velocityPercentage=-50)
+    await robot.arcTurn(42, 85, velocityPercentage=-50)
     return
 
 
