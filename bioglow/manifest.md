@@ -324,15 +324,6 @@ await robot.pidBlackLineFollow(
 
 Tune P first, then D, then I last.
 
-## MISSION COMPLETION
-
-With `debug=True`, `thatWasEasy()` plays a short tune and prints `That was easy!`. Pass an optional mission number to include it in the output. With `debug=False`, the method returns immediately.
-
-```python
-await robot.thatWasEasy()
-await robot.thatWasEasy(missionNumber=7)
-```
-
 ## CLASS CONSTANTS
 
 Change these on the class to adjust behavior for every robot.
@@ -352,6 +343,17 @@ Example:
 ```python
 RW.LIGHT_REFLECTIONS["BLACK"] = 20
 ```
+
+## COMPLETION SOUND
+
+With `debug=True`, `thatWasEasy()` plays a short tune and prints `That was easy!`. With `debug=False`, the method returns immediately.
+
+```python
+await robot.thatWasEasy()
+await robot.thatWasEasy(missionNumber=3)
+```
+
+Pass an optional `missionNumber` to include it in the output.
 
 ## COMPLETE STARTER PROGRAM
 
