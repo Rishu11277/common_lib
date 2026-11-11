@@ -338,6 +338,17 @@ Example:
 RW.LIGHT_REFLECTIONS["BLACK"] = 20
 ```
 
+## COMPLETION SOUND
+
+Play the library's completion sound. It does nothing when the robot was created with `debug=False`.
+
+```python
+await robot.thatWasEasy()
+await robot.thatWasEasy(missionNumber=3)
+```
+
+`missionNumber` is optional. When provided, it is printed after the sound.
+
 ## COMPLETE STARTER PROGRAM
 
 ```python
