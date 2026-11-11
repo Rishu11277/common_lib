@@ -10,10 +10,10 @@ from Rockstar_lib import RW
 
 async def _runMission7Old(robot: RW) -> None:
     # Mission 7 (Humongous Fungus) -> Uses move forward until black line (no gyro)
-    await robot.moveStraightGyro(rotations=3.5, velocityPercentage=30)
+    await robot.moveStraightGyro(68.612384, velocityPercentage=30)
     await robot.moveStraightUntilLine(lineColor=color.BLACK, velocityPercentage=30)
-    await robot.moveStraightGyro(0.03, velocityPercentage=5)
-    await robot.moveStraightGyro(rotations=-0.6, velocityPercentage=10)
+    await robot.moveStraightGyro(0.588106, velocityPercentage=5)
+    await robot.moveStraightGyro(-11.762123, velocityPercentage=10)
     await robot.proportionalTurn(15, velocityPercentage=20, turnType="SPIN")
     await robot.proportionalTurn(-12, velocityPercentage=20, turnType="SPIN")
 
@@ -22,8 +22,8 @@ async def _runMission7Old(robot: RW) -> None:
 
 async def _runMission7Alt(robot: RW) -> None:
     # Mission 7 (Humongous Fungus)
-    await robot.moveStraightGyro(rotations=4.02, velocityPercentage=30)
-    await robot.moveStraightGyro(rotations=-0.7, velocityPercentage=10)
+    await robot.moveStraightGyro(78.806223, velocityPercentage=30)
+    await robot.moveStraightGyro(-13.722477, velocityPercentage=10)
     await robot.proportionalTurn(15, velocityPercentage=20, turnType="SPIN")
     await robot.proportionalTurn(-12, velocityPercentage=20, turnType="SPIN")
 
@@ -34,11 +34,11 @@ async def _runMission7(robot: RW) -> None:
     # Mission 7 (Humongous Fungus)
 
     motor.run_for_degrees(port.C, 500, 1110)
-    await robot.moveStraightGyro(3.5, velocityPercentage=60)
+    await robot.moveStraightGyro(68.612384, velocityPercentage=60)
     await motor.run_for_degrees(port.C, 1400, 1110)
-    await robot.moveStraightGyro(0.2, velocityPercentage=40)
+    await robot.moveStraightGyro(3.920708, velocityPercentage=40)
     motor.run_for_degrees(port.C, 600, 1110)
-    await robot.moveStraightGyro(rotations=-0.15, velocityPercentage=50)
+    await robot.moveStraightGyro(-2.940531, velocityPercentage=50)
     return
 
 
@@ -47,12 +47,12 @@ async def _runMission6(robot: RW, forwardRotations=0.51) -> None:
     await robot.moveStraightUntilLine(lineColor=color.BLACK, velocityPercentage=50)
     motor.run_for_degrees(port.C, 600, 1110)
     await robot.proportionalTurn(-82, velocityPercentage=20, turnType="SPIN")
-    # await robot.pidBlackLineFollow(1.4, sensorPort=port.F, midPointReflectionPercentage=60, edgeToFollow=RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, velocityPercentage=8) #before derivative correction
-    # await robot.pidBlackLineFollow(1.4, sensorPort=port.F, midPointReflectionPercentage=60, edgeToFollow=RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
-    await robot.moveStraightGyro(1.7, velocityPercentage=50, acceleration=400, brakeStartPercentage=0.8, correctionMultiplier=-3.5)
+    # await robot.pidBlackLineFollow(27.444953, sensorPort=port.F, midPointReflectionPercentage=60, edgeToFollow=RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, velocityPercentage=8) #before derivative correction
+    # await robot.pidBlackLineFollow(27.444953, sensorPort=port.F, midPointReflectionPercentage=60, edgeToFollow=RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
+    await robot.moveStraightGyro(33.326015, velocityPercentage=50, acceleration=400, brakeStartPercentage=0.8, correctionMultiplier=-3.5)
     await robot.proportionalTurn(110, velocityPercentage=30, turnType="SPIN")
     await robot.squareUpOnLine(lineColor=color.BLACK, velocityPercentage=15, acceleration=500)
-    await robot.moveForward(0.5, velocityPercentage=10)
+    await robot.moveForward(9.801769, velocityPercentage=10)
     await robot.squareUpOnLine(lineColor=color.BLACK, velocityPercentage=-15, acceleration=500)
 
     return
@@ -61,7 +61,7 @@ async def _runMission6(robot: RW, forwardRotations=0.51) -> None:
 async def _runMission11(robot: RW) -> None:
     # Mission 11 (Window to the Past)
     await robot.proportionalTurn(83, velocityPercentage=25, turnType="SPIN")
-    await robot.moveStraightGyro(2, velocityPercentage=75, acceleration=400, brakeStartPercentage=0.8, correctionMultiplier=-3.5)
+    await robot.moveStraightGyro(39.207076, velocityPercentage=75, acceleration=400, brakeStartPercentage=0.8, correctionMultiplier=-3.5)
     await robot.arcTurn(42, 40, velocityPercentage=50)
     return
 
@@ -75,7 +75,7 @@ async def runMission7_6_11(robot: RW) -> None:
 
 async def runMission6_11(robot: RW) -> None:
     # use if Mission 7 (Humongous Fungus) is not to be run
-    await robot.moveStraightGyro(rotations=3.3, velocityPercentage=65)
+    await robot.moveStraightGyro(64.691676, velocityPercentage=65)
     await robot.moveStraightUntilLine(lineColor=color.BLACK, velocityPercentage=30)
     await _runMission6(robot, 0.64)
     await _runMission11(robot)
@@ -84,16 +84,16 @@ async def runMission6_11(robot: RW) -> None:
 
 async def _runMission13(robot: RW) -> None:
     # Mission 13 (Keystone Species)
-    await robot.moveStraightGyro(3.7, velocityPercentage=40)
+    await robot.moveStraightGyro(72.533091, velocityPercentage=40)
     await robot.proportionalTurn(45, turnType="PIVOT")
-    await robot.moveStraightGyro(0.25, velocityPercentage=30)
+    await robot.moveStraightGyro(4.900885, velocityPercentage=30)
     return
 
 
 async def _runMission12(robot: RW) -> None:
     # Mission 12 (Forest Elder)
     await motor.run_for_degrees(port.D, -120, 400)
-    await robot.moveStraightGyro(-0.37, velocityPercentage=30)
+    await robot.moveStraightGyro(-7.253309, velocityPercentage=30)
     await robot.proportionalTurn(-30, turnType="PIVOT")
     await robot.arcTurn(42, 85, velocityPercentage=-50)
     return
@@ -106,8 +106,8 @@ async def runMission13_12(robot: RW) -> None:
 
 async def _runMission15(robot: RW) -> None:
     # Biocentric Architecture
-    await robot.moveStraightGyro(1.2, velocityPercentage=25)
-    await robot.moveStraightGyro(-2, velocityPercentage=100)
+    await robot.moveStraightGyro(23.524246, velocityPercentage=25)
+    await robot.moveStraightGyro(-39.207076, velocityPercentage=100)
     return
 
 
@@ -119,13 +119,14 @@ async def main() -> None:
         rightMotorPort=port.B,
         leftSensorPort=port.E,
         rightSensorPort=port.F,
+        CENTIMETERS=True,
     )
 
     # await _runMission15(robot)
 
     # await robot.squareUpOnLine(lineColor=color.BLACK, velocityPercentage=-15, acceleration=500)
     # time.sleep(1)
-    # await robot.moveStraightGyro(-0.15, velocityPercentage=10)
+    # await robot.moveStraightGyro(-2.940531, velocityPercentage=10)
     # await robot.squareUpOnLine(lineColor=color.BLACK, velocityPercentage=15, acceleration=500)
 
     # await _runMission7(robot)
@@ -138,9 +139,9 @@ async def main() -> None:
 
     # right home base to left home base
     # await robot.arcTurn(32, -90, velocityPercentage=20)
-    # await robot.moveStraightGyro(4, velocityPercentage=40)
+    # await robot.moveStraightGyro(78.414153, velocityPercentage=40)
     # await robot.proportionalTurn(-45, velocityPercentage=30, turnType="SPIN")
-    # await robot.moveForward(1.4, velocityPercentage=40)
+    # await robot.moveForward(27.444953, velocityPercentage=40)
 
 
 runloop.run(main())

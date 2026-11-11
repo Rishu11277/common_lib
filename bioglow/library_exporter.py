@@ -19,6 +19,7 @@ class RW:
     YAW_SCALE = -0.1
     YAW_RESET_DELAY = 0.1
     DEGREES_PER_ROTATION = 360
+    WHEEL_CIRCUMFERENCE_IN_CENTIMETERS = 19.6035381584
     END_SPEED_PERCENTAGE = 0.1
     INTEGRAL_LIMIT = 100
     LOOP_DELAY_MS = 10
@@ -54,7 +55,7 @@ class RW:
     LINE_COLOR_NAMES = {color.BLACK: "Black", color.WHITE: "White"}
 
     def __init__(self, robot="Misty", leftMotorPort=port.A, rightMotorPort=port.B, leftSensorPort=port.E, rightSensorPort=port.F,
-                 wheelBaseInCentimeters=8.8, acceleration=500, deceleration=1000, brakeStartPercentage=0.9, correctionMultiplier=-3.5, debug=True):
+                 wheelBaseInCentimeters=8.8, acceleration=500, deceleration=1000, brakeStartPercentage=0.9, correctionMultiplier=-3.5, debug=True, CENTIMETERS=True):
         self.ROBOT_NAME = robot
         self.PORTS = {"LEFT_MOTOR": leftMotorPort, "RIGHT_MOTOR": rightMotorPort, "LEFT_SENSOR": leftSensorPort, "RIGHT_SENSOR": rightSensorPort}
         self.WHEEL_BASE_IN_CENTIMETERS = wheelBaseInCentimeters
@@ -63,6 +64,7 @@ class RW:
         self.BRAKE_START_PERCENTAGE = brakeStartPercentage
         self.CORRECTION_MULTIPLIER = correctionMultiplier
         self.DEBUG = debug
+        self.CENTIMETERS = CENTIMETERS
 
     def __format(self, value):
         if isinstance(value, float):
@@ -136,6 +138,19 @@ class RW:
 
     def __checkDegrees(self, degrees):
         return self.__checkNotZero("Degrees", degrees, self.MAX_TURN_DEGREES)
+
+    def __toRotations(self, distance):
+        if not self.CENTIMETERS:
+            return distance
+        rotations = distance / self.WHEEL_CIRCUMFERENCE_IN_CENTIMETERS
+        # Keep conversion noise from shifting the encoder target by one degree.
+        return round(rotations, 6) or rotations
+
+    def __travelResult(self, degrees):
+        rotations = degrees / self.DEGREES_PER_ROTATION
+        if self.CENTIMETERS:
+            return ("Actual Distance Traveled (cm)", rotations * self.WHEEL_CIRCUMFERENCE_IN_CENTIMETERS)
+        return ("Actual Rotations Traveled", rotations)
 
     def __percentageToUnits(self, percentage):
         return self.WHEEL_MAX_VELOCITY * percentage/100
@@ -299,45 +314,48 @@ class RW:
         velocityPercentage = self.DEFAULTS["GENERAL_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
         deceleration = self.DECELERATION if deceleration is None else deceleration
+        distanceLabel = "Distance (cm)" if self.CENTIMETERS else "Rotations"
         callStartTime = time.ticks_ms()
         inputs = [
-            ("Rotations", rotations),
+            (distanceLabel, rotations),
             ("Velocity", velocityPercentage),
             ("Acceleration", acceleration),
             ("Deceleration", deceleration),
         ]
         errors = self.__findErrors(
-            self.__checkNotZero("Rotations", rotations),
+            self.__checkNotZero(distanceLabel, rotations),
             self.__checkVelocity(velocityPercentage),
         )
         if errors:
             self.__printErrors("Move Forward", inputs, errors, callStartTime)
             return
 
+        rotations = self.__toRotations(rotations)
         rightPort = self.PORTS["RIGHT_MOTOR"]
         startPosition = motor.relative_position(rightPort) if self.DEBUG else 0
         await motor_pair.move_for_degrees(motor_pair.PAIR_1, int(rotations * self.DEGREES_PER_ROTATION), 0,
                                           velocity=int(self.__percentageToUnits(velocityPercentage)), stop=motor.BRAKE,
                                           acceleration=acceleration, deceleration=deceleration)
         if self.DEBUG:
-            rotationsTraveled = (motor.relative_position(rightPort) - startPosition) / self.DEGREES_PER_ROTATION
-            self.__printResults("Move Forward", inputs, [("Actual Rotations Traveled", rotationsTraveled)], callStartTime)
+            travel = self.__travelResult(motor.relative_position(rightPort) - startPosition)
+            self.__printResults("Move Forward", inputs, [travel], callStartTime)
 
     async def moveStraightGyro(self, rotations, velocityPercentage=None, acceleration=None, brakeStartPercentage=None, correctionMultiplier=None) -> None:
         velocityPercentage = self.DEFAULTS["GENERAL_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
         brakeStartPercentage = self.BRAKE_START_PERCENTAGE if brakeStartPercentage is None else brakeStartPercentage
         correctionMultiplier = self.CORRECTION_MULTIPLIER if correctionMultiplier is None else correctionMultiplier
+        distanceLabel = "Distance (cm)" if self.CENTIMETERS else "Rotations"
         callStartTime = time.ticks_ms()
         inputs = [
-            ("Rotations", rotations),
+            (distanceLabel, rotations),
             ("Velocity", velocityPercentage),
             ("Acceleration", acceleration),
             ("Brake Start", brakeStartPercentage),
             ("Correction Multiplier", correctionMultiplier),
         ]
         errors = self.__findErrors(
-            self.__checkNotZero("Rotations", rotations),
+            self.__checkNotZero(distanceLabel, rotations),
             self.__checkVelocity(velocityPercentage, allowNegative=True),
             self.__checkRange("Brake start", brakeStartPercentage, 0, 1),
             self.__checkBelow("Correction multiplier", correctionMultiplier, 0),
@@ -346,6 +364,7 @@ class RW:
             self.__printErrors("Move Straight (Gyro)", inputs, errors, callStartTime)
             return
 
+        rotations = self.__toRotations(rotations)
         motion_sensor.reset_yaw(0)
 
         direction = 1 if rotations > 0 else -1
@@ -365,7 +384,7 @@ class RW:
             motor_pair.move_tank(motor_pair.PAIR_1, velocity + correction - int(deceleration), velocity - correction - int(deceleration), acceleration=acceleration)
 
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__printResults("Move Straight (Gyro)", inputs, [("Actual Rotations Traveled", motor.relative_position(rightPort) / self.DEGREES_PER_ROTATION), ("Ending Drift", self.__yaw())], callStartTime)
+        self.__printResults("Move Straight (Gyro)", inputs, [self.__travelResult(motor.relative_position(rightPort)), ("Ending Drift", self.__yaw())], callStartTime)
 
     async def squareUpOnWall(self, seconds=None, velocityPercentage=None, acceleration=None, deceleration=None) -> None:
         seconds = self.DEFAULTS["WALL_SECONDS"] if seconds is None else seconds
@@ -459,7 +478,7 @@ class RW:
         motor_pair.stop(motor_pair.PAIR_1)
         triggeredSensorPort = leftPort if self.__onLine(leftPort, lineColor) else rightPort
         self.__printResults("Move Straight Until Line (Gyro)", inputs, [("Triggered Sensor", self.__portName(triggeredSensorPort))] + self.__sensorReadings(leftPort, rightPort) +
-                         [("Actual Rotations Traveled", motor.relative_position(motorPort) / self.DEGREES_PER_ROTATION), ("Ending Drift", self.__yaw())], callStartTime)
+                         [self.__travelResult(motor.relative_position(motorPort)), ("Ending Drift", self.__yaw())], callStartTime)
         return triggeredSensorPort
 
     async def squareUpOnLine(self, lineColor, velocityPercentage=None, acceleration=None) -> None:
@@ -506,9 +525,10 @@ class RW:
         derivativeCoef = self.DEFAULTS["PID_D"] if derivativeCoef is None else derivativeCoef
         velocityPercentage = self.DEFAULTS["PID_VELOCITY"] if velocityPercentage is None else velocityPercentage
         acceleration = self.ACCELERATION if acceleration is None else acceleration
+        distanceLabel = "Distance (cm)" if self.CENTIMETERS else "Rotations"
         callStartTime = time.ticks_ms()
         inputs = [
-            ("Rotations", rotations),
+            (distanceLabel, rotations),
             ("Sensor", self.__portName(sensorPort)),
             ("Midpoint Reflection", midPointReflectionPercentage),
             ("Edge", edgeToFollow),
@@ -519,7 +539,7 @@ class RW:
             ("Acceleration", acceleration),
         ]
         errors = self.__findErrors(
-            self.__checkNotZero("Rotations", rotations),
+            self.__checkNotZero(distanceLabel, rotations),
             self.__checkVelocity(velocityPercentage),
             self.__checkRange("Midpoint reflection", midPointReflectionPercentage, 0, 100),
             self.__checkOneOf("Edge", edgeToFollow, (self.BLACK_LINE_LEFT_EDGE, self.BLACK_LINE_RIGHT_EDGE)),
@@ -528,6 +548,7 @@ class RW:
             self.__printErrors("PID Black Line Follow", inputs, errors, callStartTime)
             return
 
+        rotations = self.__toRotations(rotations)
         rightPort = self.PORTS["RIGHT_MOTOR"]
         direction = 1 if rotations > 0 else -1
         velocity = self.__percentageToUnits(velocityPercentage) * direction
@@ -553,7 +574,7 @@ class RW:
             await runloop.sleep_ms(self.LOOP_DELAY_MS)
 
         motor_pair.stop(motor_pair.PAIR_1)
-        self.__printResults("PID Black Line Follow", inputs, [("Actual Rotations Traveled", motor.relative_position(rightPort) / self.DEGREES_PER_ROTATION), ("Final Sensor Reflection", color_sensor.reflection(sensorPort))], callStartTime)
+        self.__printResults("PID Black Line Follow", inputs, [self.__travelResult(motor.relative_position(rightPort)), ("Final Sensor Reflection", color_sensor.reflection(sensorPort))], callStartTime)
 
     async def thatWasEasy(self, missionNumber=None):
         if not self.DEBUG:

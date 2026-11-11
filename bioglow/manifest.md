@@ -38,6 +38,7 @@ robot = RW(
     brakeStartPercentage=0.9,
     correctionMultiplier=-3.5,
     debug=True,
+    CENTIMETERS=True,
 )
 ```
 
@@ -52,6 +53,7 @@ Every parameter is optional. The values above are the defaults.
 | `acceleration`, `deceleration` | Default acceleration and deceleration for movement |
 | `brakeStartPercentage` | Fraction of a gyro move (0 to 1) after which braking starts |
 | `correctionMultiplier` | Gyro drift correction strength. Must be negative. Typical values are -1 to -5 |
+| `CENTIMETERS` | `True` uses centimeters for distance inputs and travel logs. `False` uses wheel rotations |
 | `debug` | `True` prints movement diagnostics and enables `thatWasEasy()`. `False` keeps input validation errors enabled |
 
 The pair ports and the `RW` motor ports must match.
@@ -85,7 +87,7 @@ If input validation fails, the method prints the validation errors and returns b
 ## UNITS
 
 - **Velocity** is a percentage of `RW.WHEEL_MAX_VELOCITY`.
-- **Rotations** are wheel rotations. Positive values drive forward and negative values drive backward.
+- **Travel distance** is in centimeters by default. Use `RW(CENTIMETERS=False)` for wheel rotations. Positive distances drive forward and negative distances drive backward. The existing `rotations` keyword for distance-based methods follows the selected unit.
 - **Turn degrees** are relative to the starting heading. The allowed range is -179 to 179, excluding 0. Positive angles turn right for `turn()`, `proportionalTurn()`, and forward arcs. Backward arcs reverse that heading change.
 
 ## MOVEMENT
@@ -93,51 +95,51 @@ If input validation fails, the method prints the validation errors and returns b
 Move straight without gyro correction.
 
 ```python
-await robot.moveForward(rotations)
+await robot.moveForward(distance)
 ```
 
 Examples:
 
 ```python
-await robot.moveForward(2, velocityPercentage=50)
-await robot.moveForward(-2, velocityPercentage=50)
+await robot.moveForward(40, velocityPercentage=50)
+await robot.moveForward(-40, velocityPercentage=50)
 ```
 
 Optional settings:
 
 ```python
-await robot.moveForward(rotations, velocityPercentage, acceleration=500, deceleration=1000)
+await robot.moveForward(distance, velocityPercentage, acceleration=500, deceleration=1000)
 ```
 
 | Input | Allowed values |
 |---|---|
-| `rotations` | Any number except 0 |
+| `distance` | Any number except 0, in the selected unit |
 | `velocityPercentage` | 1 to 100. Default 40 |
 | `acceleration`, `deceleration` | Default to the values set on the `RW` instance |
 
 Move straight with gyro correction. The braking calculation uses 10% of maximum wheel speed as its floor. A move that starts below that speed can speed up during braking.
 
 ```python
-await robot.moveStraightGyro(rotations)
+await robot.moveStraightGyro(distance)
 ```
 
 Examples:
 
 ```python
-await robot.moveStraightGyro(3, velocityPercentage=60)
-await robot.moveStraightGyro(-0.5, velocityPercentage=30)
+await robot.moveStraightGyro(60, velocityPercentage=60)
+await robot.moveStraightGyro(-10, velocityPercentage=30)
 ```
 
 Optional settings:
 
 ```python
-await robot.moveStraightGyro(rotations, velocityPercentage, acceleration=500, brakeStartPercentage=0.9, correctionMultiplier=-3.5)
+await robot.moveStraightGyro(distance, velocityPercentage, acceleration=500, brakeStartPercentage=0.9, correctionMultiplier=-3.5)
 ```
 
 | Input | Allowed values |
 |---|---|
-| `rotations` | Any number except 0 |
-| `velocityPercentage` | -100 to 100, excluding 0. Default 40. `rotations` sets direction |
+| `distance` | Any number except 0, in the selected unit |
+| `velocityPercentage` | -100 to 100, excluding 0. Default 40. `distance` sets direction |
 | `brakeStartPercentage` | 0 to 1. Defaults to the value set on the `RW` instance |
 | `correctionMultiplier` | Negative. Defaults to the value set on the `RW` instance |
 | `acceleration` | Defaults to the value set on the `RW` instance |
@@ -286,24 +288,24 @@ await robot.squareUpOnLine(lineColor, velocityPercentage=15, acceleration=500)
 
 For best results, run slowly, back off the line, and run it a second time.
 
-Follow a black line using PID correction. Positive rotations move forward; negative rotations move backward. Keep `velocityPercentage` positive for either direction.
+Follow a black line using PID correction. Positive distances move forward and negative distances move backward. Keep `velocityPercentage` positive for either direction.
 
 ```python
-await robot.pidBlackLineFollow(rotations, sensorPort, midPointReflectionPercentage, edgeToFollow)
+await robot.pidBlackLineFollow(distance, sensorPort, midPointReflectionPercentage, edgeToFollow)
 ```
 
 Example:
 
 ```python
-await robot.pidBlackLineFollow(1.4, port.F, 60, RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
-await robot.pidBlackLineFollow(-1.4, port.F, 60, RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
+await robot.pidBlackLineFollow(27.5, port.F, 60, RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
+await robot.pidBlackLineFollow(-27.5, port.F, 60, RW.BLACK_LINE_LEFT_EDGE, proportionalCoef=0.1, derivativeCoef=3.0, velocityPercentage=8)
 ```
 
 Optional settings:
 
 ```python
 await robot.pidBlackLineFollow(
-    rotations,
+    distance,
     sensorPort,
     midPointReflectionPercentage,
     edgeToFollow,
@@ -330,6 +332,7 @@ Change these on the class to adjust behavior for every robot.
 
 | Constant | Default | Meaning |
 |---|---|---|
+| `WHEEL_CIRCUMFERENCE_IN_CENTIMETERS` | 19.6035381584 | Travel per full wheel rotation |
 | `WHEEL_MAX_VELOCITY` | 1110 | Max wheel speed that 100% maps to |
 | `LIGHT_REFLECTIONS` | `{"BLACK": 25, "WHITE": 95}` | Black is detected below 25 and white above 95 |
 | `LOOP_DELAY_MS` | 10 | Milliseconds between updates in loops that call `runloop.sleep_ms()` |
@@ -369,10 +372,10 @@ async def main():
     motor_pair.pair(motor_pair.PAIR_1, port.A, port.B)
     robot = RW(robot="Misty", leftMotorPort=port.A, rightMotorPort=port.B)
 
-    await robot.moveStraightGyro(2, velocityPercentage=50)
+    await robot.moveStraightGyro(40, velocityPercentage=50)
     await robot.proportionalTurn(90, "SPIN")
     await robot.moveStraightUntilLineGyro(color.BLACK)
-    await robot.moveForward(-1, velocityPercentage=40)
+    await robot.moveForward(-20, velocityPercentage=40)
 
 
 runloop.run(main())
@@ -383,7 +386,7 @@ runloop.run(main())
 All movement methods and `thatWasEasy()` are asynchronous. Call them with `await` from inside an `async` function.
 
 ```python
-await robot.moveForward(1, velocityPercentage=50)
+await robot.moveForward(20, velocityPercentage=50)
 ```
 
 Creating the robot with `RW(...)` is a normal call and does not use `await`.
