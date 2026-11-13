@@ -17,7 +17,7 @@ const float TRIM_FRACTION = 0.10;
 const int TRIM = GROUPS * TRIM_FRACTION;
 
 const float TURBIDITY_OFFSET = 0.0;
-const float TURBIDITY_LIMIT = 25.0;
+const float TURBIDITY_LIMIT = 10.0;
 const float TDS_LIMIT = 500.0;
 const float HYSTERESIS = 0.9;
 
